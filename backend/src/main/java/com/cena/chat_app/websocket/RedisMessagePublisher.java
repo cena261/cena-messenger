@@ -1,8 +1,8 @@
 package com.cena.chat_app.websocket;
 
 import com.cena.chat_app.dto.response.MessageResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,7 +24,7 @@ public class RedisMessagePublisher {
         try {
             String payload = objectMapper.writeValueAsString(message);
             redisTemplate.convertAndSend(channel, payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new RuntimeException("Failed to serialize message", e);
         }
     }
