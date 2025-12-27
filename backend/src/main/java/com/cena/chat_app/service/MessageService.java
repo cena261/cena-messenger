@@ -14,6 +14,7 @@ import com.cena.chat_app.repository.ConversationRepository;
 import com.cena.chat_app.repository.MessageRepository;
 import com.cena.chat_app.repository.UserRepository;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -30,15 +31,18 @@ public class MessageService {
     private final ConversationRepository conversationRepository;
     private final ConversationMemberRepository conversationMemberRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public MessageService(MessageRepository messageRepository,
                          ConversationRepository conversationRepository,
                          ConversationMemberRepository conversationMemberRepository,
-                         UserRepository userRepository) {
+                         UserRepository userRepository,
+                         SimpMessagingTemplate messagingTemplate) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     public ApiResponse<MessageResponse> sendMessage(SendMessageRequest request) {
@@ -75,6 +79,8 @@ public class MessageService {
         conversationRepository.save(conversation);
 
         MessageResponse response = buildMessageResponse(message);
+
+        messagingTemplate.convertAndSend("/topic/conversation." + request.getConversationId(), response);
 
         return ApiResponse.<MessageResponse>builder()
             .status("success")
