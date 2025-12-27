@@ -18,10 +18,12 @@ public class WebSocketEventListener {
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
         StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
         String sessionId = headerAccessor.getSessionId();
-        String userId = (String) headerAccessor.getSessionAttributes().get("userId");
 
-        if (userId != null && sessionId != null) {
-            presenceService.addSession(userId, sessionId);
+        if (headerAccessor.getSessionAttributes() != null) {
+            String userId = (String) headerAccessor.getSessionAttributes().get("userId");
+            if (userId != null && sessionId != null) {
+                presenceService.addSession(userId, sessionId);
+            }
         }
     }
 
