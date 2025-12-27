@@ -5,9 +5,12 @@ import com.cena.chat_app.dto.request.CreateDirectConversationRequest;
 import com.cena.chat_app.dto.request.CreateGroupConversationRequest;
 import com.cena.chat_app.dto.response.ConversationMemberResponse;
 import com.cena.chat_app.dto.response.ConversationResponse;
+import com.cena.chat_app.dto.response.UnreadUpdateResponse;
 import com.cena.chat_app.entity.Conversation;
 import com.cena.chat_app.entity.ConversationMember;
 import com.cena.chat_app.entity.User;
+import com.cena.chat_app.exception.AppException;
+import com.cena.chat_app.exception.ErrorCode;
 import com.cena.chat_app.repository.ConversationMemberRepository;
 import com.cena.chat_app.repository.ConversationRepository;
 import com.cena.chat_app.repository.UserRepository;
@@ -24,13 +27,19 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final ConversationMemberRepository conversationMemberRepository;
     private final UserRepository userRepository;
+    private final RedisUnreadService redisUnreadService;
+    private final RedisUnreadPublisher redisUnreadPublisher;
 
     public ConversationService(ConversationRepository conversationRepository,
                               ConversationMemberRepository conversationMemberRepository,
-                              UserRepository userRepository) {
+                              UserRepository userRepository,
+                              RedisUnreadService redisUnreadService,
+                              RedisUnreadPublisher redisUnreadPublisher) {
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
+        this.redisUnreadService = redisUnreadService;
+        this.redisUnreadPublisher = redisUnreadPublisher;
     }
 
     public ApiResponse<ConversationResponse> createDirectConversation(CreateDirectConversationRequest request) {
@@ -215,6 +224,38 @@ public class ConversationService {
             .message("Conversations retrieved successfully")
             .data(responses)
             .build();
+    }
+
+    public ApiResponse<UnreadUpdateResponse> markConversationAsRead(String conversationId) {
+        String currentUserId = getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        ConversationMember membership = conversationMemberRepository
+                .findByConversationIdAndUserId(conversationId, currentUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
+
+        long currentUnreadCount = redisUnreadService.getUnreadCount(currentUserId, conversationId);
+
+        membership.setUnreadCount(currentUnreadCount);
+        conversationMemberRepository.save(membership);
+
+        redisUnreadService.resetUnreadCount(currentUserId, conversationId);
+
+        UnreadUpdateResponse unreadUpdate = UnreadUpdateResponse.builder()
+                .conversationId(conversationId)
+                .unreadCount(0L)
+                .build();
+
+        redisUnreadPublisher.publishUnreadUpdate(currentUserId, unreadUpdate);
+
+        return ApiResponse.<UnreadUpdateResponse>builder()
+                .status("success")
+                .code("SUCCESS")
+                .message("Conversation marked as read")
+                .data(unreadUpdate)
+                .build();
     }
 
     private Conversation findExistingDirectConversation(String userId1, String userId2) {

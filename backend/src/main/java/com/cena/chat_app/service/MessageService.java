@@ -3,6 +3,7 @@ package com.cena.chat_app.service;
 import com.cena.chat_app.dto.ApiResponse;
 import com.cena.chat_app.dto.request.SendMessageRequest;
 import com.cena.chat_app.dto.response.MessageResponse;
+import com.cena.chat_app.dto.response.UnreadUpdateResponse;
 import com.cena.chat_app.entity.Conversation;
 import com.cena.chat_app.entity.ConversationMember;
 import com.cena.chat_app.entity.Message;
@@ -32,17 +33,23 @@ public class MessageService {
     private final ConversationMemberRepository conversationMemberRepository;
     private final UserRepository userRepository;
     private final RedisMessagePublisher redisMessagePublisher;
+    private final RedisUnreadService redisUnreadService;
+    private final RedisUnreadPublisher redisUnreadPublisher;
 
     public MessageService(MessageRepository messageRepository,
             ConversationRepository conversationRepository,
             ConversationMemberRepository conversationMemberRepository,
             UserRepository userRepository,
-            RedisMessagePublisher redisMessagePublisher) {
+            RedisMessagePublisher redisMessagePublisher,
+            RedisUnreadService redisUnreadService,
+            RedisUnreadPublisher redisUnreadPublisher) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
         this.redisMessagePublisher = redisMessagePublisher;
+        this.redisUnreadService = redisUnreadService;
+        this.redisUnreadPublisher = redisUnreadPublisher;
     }
 
     public ApiResponse<MessageResponse> sendMessage(SendMessageRequest request) {
@@ -82,6 +89,19 @@ public class MessageService {
         MessageResponse response = buildMessageResponse(message);
 
         redisMessagePublisher.publishMessage(request.getConversationId(), response);
+
+        List<ConversationMember> members = conversationMemberRepository.findByConversationId(request.getConversationId());
+        for (ConversationMember member : members) {
+            if (!member.getUserId().equals(currentUserId)) {
+                redisUnreadService.incrementUnreadCount(member.getUserId(), request.getConversationId());
+                long unreadCount = redisUnreadService.getUnreadCount(member.getUserId(), request.getConversationId());
+                UnreadUpdateResponse unreadUpdate = UnreadUpdateResponse.builder()
+                        .conversationId(request.getConversationId())
+                        .unreadCount(unreadCount)
+                        .build();
+                redisUnreadPublisher.publishUnreadUpdate(member.getUserId(), unreadUpdate);
+            }
+        }
 
         return ApiResponse.<MessageResponse>builder()
                 .status("success")
