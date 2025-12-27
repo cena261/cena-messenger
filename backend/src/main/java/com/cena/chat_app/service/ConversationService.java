@@ -5,6 +5,7 @@ import com.cena.chat_app.dto.request.CreateDirectConversationRequest;
 import com.cena.chat_app.dto.request.CreateGroupConversationRequest;
 import com.cena.chat_app.dto.response.ConversationMemberResponse;
 import com.cena.chat_app.dto.response.ConversationResponse;
+import com.cena.chat_app.dto.response.SeenEventResponse;
 import com.cena.chat_app.dto.response.UnreadUpdateResponse;
 import com.cena.chat_app.entity.Conversation;
 import com.cena.chat_app.entity.ConversationMember;
@@ -29,17 +30,20 @@ public class ConversationService {
     private final UserRepository userRepository;
     private final RedisUnreadService redisUnreadService;
     private final RedisUnreadPublisher redisUnreadPublisher;
+    private final RedisSeenPublisher redisSeenPublisher;
 
     public ConversationService(ConversationRepository conversationRepository,
                               ConversationMemberRepository conversationMemberRepository,
                               UserRepository userRepository,
                               RedisUnreadService redisUnreadService,
-                              RedisUnreadPublisher redisUnreadPublisher) {
+                              RedisUnreadPublisher redisUnreadPublisher,
+                              RedisSeenPublisher redisSeenPublisher) {
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
         this.redisUnreadService = redisUnreadService;
         this.redisUnreadPublisher = redisUnreadPublisher;
+        this.redisSeenPublisher = redisSeenPublisher;
     }
 
     public ApiResponse<ConversationResponse> createDirectConversation(CreateDirectConversationRequest request) {
@@ -232,6 +236,9 @@ public class ConversationService {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+
         ConversationMember membership = conversationMemberRepository
                 .findByConversationIdAndUserId(conversationId, currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
@@ -239,6 +246,7 @@ public class ConversationService {
         long currentUnreadCount = redisUnreadService.getUnreadCount(currentUserId, conversationId);
 
         membership.setUnreadCount(currentUnreadCount);
+        membership.setLastReadMessageId(conversation.getLastMessageId());
         conversationMemberRepository.save(membership);
 
         redisUnreadService.resetUnreadCount(currentUserId, conversationId);
@@ -249,6 +257,16 @@ public class ConversationService {
                 .build();
 
         redisUnreadPublisher.publishUnreadUpdate(currentUserId, unreadUpdate);
+
+        if (conversation.getLastMessageId() != null) {
+            SeenEventResponse seenEvent = SeenEventResponse.builder()
+                    .conversationId(conversationId)
+                    .userId(currentUserId)
+                    .lastReadMessageId(conversation.getLastMessageId())
+                    .build();
+
+            redisSeenPublisher.publishSeenEvent(conversationId, seenEvent);
+        }
 
         return ApiResponse.<UnreadUpdateResponse>builder()
                 .status("success")

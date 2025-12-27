@@ -1,6 +1,8 @@
 package com.cena.chat_app.config;
 
 import com.cena.chat_app.websocket.RedisMessageSubscriber;
+import com.cena.chat_app.websocket.RedisSeenSubscriber;
+import com.cena.chat_app.websocket.RedisTypingSubscriber;
 import com.cena.chat_app.websocket.RedisUnreadSubscriber;
 import tools.jackson.databind.DeserializationFeature;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
@@ -29,11 +31,15 @@ public class RedisConfig {
     public RedisMessageListenerContainer redisMessageListenerContainer(
             RedisConnectionFactory connectionFactory,
             RedisMessageSubscriber messageSubscriber,
-            RedisUnreadSubscriber unreadSubscriber) {
+            RedisUnreadSubscriber unreadSubscriber,
+            RedisSeenSubscriber seenSubscriber,
+            RedisTypingSubscriber typingSubscriber) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.addMessageListener(messageSubscriber, messageSubscriber.getChannelPattern());
         container.addMessageListener(unreadSubscriber, unreadSubscriber.getChannelPattern());
+        container.addMessageListener(seenSubscriber, seenSubscriber.getChannelPattern());
+        container.addMessageListener(typingSubscriber, typingSubscriber.getChannelPattern());
         return container;
     }
 }
