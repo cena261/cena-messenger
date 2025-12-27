@@ -2,9 +2,6 @@ spring:
   data:
     mongodb:
       database: chat_app_test
-    redis:
-      host: localhost
-      port: 16379
 
 jwt:
   secret-key: testsecretkeytestsecretkeytestsecretkeytestsecretkey
