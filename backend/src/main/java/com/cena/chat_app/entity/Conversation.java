@@ -1,6 +1,7 @@
 package com.cena.chat_app.entity;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
@@ -13,6 +14,7 @@ import static org.springframework.data.mongodb.core.index.IndexDirection.DESCEND
 
 @Document(collection = "conversations")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Conversation {

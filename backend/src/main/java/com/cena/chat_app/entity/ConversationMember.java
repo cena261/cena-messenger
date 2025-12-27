@@ -1,6 +1,7 @@
 package com.cena.chat_app.entity;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
@@ -17,6 +18,7 @@ import java.time.Instant;
     @CompoundIndex(name = "userId_unreadCount_idx", def = "{'userId': 1, 'unreadCount': 1}")
 })
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConversationMember {

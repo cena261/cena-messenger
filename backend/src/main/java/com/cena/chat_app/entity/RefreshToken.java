@@ -1,6 +1,7 @@
 package com.cena.chat_app.entity;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit;
 
 @Document(collection = "refresh_tokens")
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class RefreshToken {

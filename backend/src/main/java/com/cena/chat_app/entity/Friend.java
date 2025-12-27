@@ -1,6 +1,7 @@
 package com.cena.chat_app.entity;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
@@ -13,6 +14,7 @@ import java.time.Instant;
 @Document(collection = "friends")
 @CompoundIndex(name = "userId_friendId_unique_idx", def = "{'userId': 1, 'friendId': 1}", unique = true)
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Friend {
