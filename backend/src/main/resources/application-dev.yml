@@ -7,6 +7,6 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password: redis123
+      password: ${REDIS_PASSWORD}
   mongodb:
-    uri: mongodb://admin:admin123@localhost:27017/chat_app?authSource=admin
+    uri: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/${MONGO_DB_NAME}?authSource=admin
