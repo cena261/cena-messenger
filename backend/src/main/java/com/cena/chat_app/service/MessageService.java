@@ -13,8 +13,8 @@ import com.cena.chat_app.repository.ConversationMemberRepository;
 import com.cena.chat_app.repository.ConversationRepository;
 import com.cena.chat_app.repository.MessageRepository;
 import com.cena.chat_app.repository.UserRepository;
+import com.cena.chat_app.websocket.RedisMessagePublisher;
 import org.springframework.data.domain.Pageable;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -31,18 +31,18 @@ public class MessageService {
     private final ConversationRepository conversationRepository;
     private final ConversationMemberRepository conversationMemberRepository;
     private final UserRepository userRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final RedisMessagePublisher redisMessagePublisher;
 
     public MessageService(MessageRepository messageRepository,
                          ConversationRepository conversationRepository,
                          ConversationMemberRepository conversationMemberRepository,
                          UserRepository userRepository,
-                         SimpMessagingTemplate messagingTemplate) {
+                         RedisMessagePublisher redisMessagePublisher) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
-        this.messagingTemplate = messagingTemplate;
+        this.redisMessagePublisher = redisMessagePublisher;
     }
 
     public ApiResponse<MessageResponse> sendMessage(SendMessageRequest request) {
@@ -80,7 +80,7 @@ public class MessageService {
 
         MessageResponse response = buildMessageResponse(message);
 
-        messagingTemplate.convertAndSend("/topic/conversation." + request.getConversationId(), response);
+        redisMessagePublisher.publishMessage(request.getConversationId(), response);
 
         return ApiResponse.<MessageResponse>builder()
             .status("success")
