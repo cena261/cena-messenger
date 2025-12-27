@@ -1,7 +1,8 @@
 package com.cena.chat_app.config;
 
 import com.cena.chat_app.websocket.RedisMessageSubscriber;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.DeserializationFeature;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -12,8 +13,10 @@ import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 public class RedisConfig {
 
     @Bean
-    public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+    public JsonMapperBuilderCustomizer jsonMapperBuilderCustomizer() {
+        return (builder) -> {
+            builder.disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
+        };
     }
 
     @Bean

@@ -34,10 +34,10 @@ public class MessageService {
     private final RedisMessagePublisher redisMessagePublisher;
 
     public MessageService(MessageRepository messageRepository,
-                         ConversationRepository conversationRepository,
-                         ConversationMemberRepository conversationMemberRepository,
-                         UserRepository userRepository,
-                         RedisMessagePublisher redisMessagePublisher) {
+            ConversationRepository conversationRepository,
+            ConversationMemberRepository conversationMemberRepository,
+            UserRepository userRepository,
+            RedisMessagePublisher redisMessagePublisher) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
@@ -52,25 +52,26 @@ public class MessageService {
         }
 
         Conversation conversation = conversationRepository.findById(request.getConversationId())
-            .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
 
         ConversationMember membership = conversationMemberRepository
-            .findByConversationIdAndUserId(request.getConversationId(), currentUserId)
-            .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
+                .findByConversationIdAndUserId(request.getConversationId(), currentUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
 
         if (!membership.isCanSendMessage()) {
-            throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED, "You do not have permission to send messages in this conversation");
+            throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED,
+                    "You do not have permission to send messages in this conversation");
         }
 
         Message message = Message.builder()
-            .conversationId(request.getConversationId())
-            .senderId(currentUserId)
-            .type("TEXT")
-            .content(request.getContent())
-            .isDeleted(false)
-            .createdAt(Instant.now())
-            .updatedAt(Instant.now())
-            .build();
+                .conversationId(request.getConversationId())
+                .senderId(currentUserId)
+                .type("TEXT")
+                .content(request.getContent())
+                .isDeleted(false)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
 
         message = messageRepository.save(message);
 
@@ -83,11 +84,11 @@ public class MessageService {
         redisMessagePublisher.publishMessage(request.getConversationId(), response);
 
         return ApiResponse.<MessageResponse>builder()
-            .status("success")
-            .code("SUCCESS")
-            .message("Message sent successfully")
-            .data(response)
-            .build();
+                .status("success")
+                .code("SUCCESS")
+                .message("Message sent successfully")
+                .data(response)
+                .build();
     }
 
     public ApiResponse<List<MessageResponse>> getMessages(String conversationId, Pageable pageable) {
@@ -97,17 +98,17 @@ public class MessageService {
         }
 
         Conversation conversation = conversationRepository.findById(conversationId)
-            .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_NOT_FOUND));
 
         conversationMemberRepository.findByConversationIdAndUserId(conversationId, currentUserId)
-            .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
 
         List<Message> messages = messageRepository.findByConversationIdOrderByCreatedAtDesc(conversationId, pageable);
 
         List<String> senderIds = messages.stream()
-            .map(Message::getSenderId)
-            .distinct()
-            .collect(Collectors.toList());
+                .map(Message::getSenderId)
+                .distinct()
+                .collect(Collectors.toList());
 
         Map<String, User> usersMap = new HashMap<>();
         if (!senderIds.isEmpty()) {
@@ -117,15 +118,15 @@ public class MessageService {
 
         Map<String, User> finalUsersMap = usersMap;
         List<MessageResponse> responses = messages.stream()
-            .map(message -> buildMessageResponse(message, finalUsersMap.get(message.getSenderId())))
-            .collect(Collectors.toList());
+                .map(message -> buildMessageResponse(message, finalUsersMap.get(message.getSenderId())))
+                .collect(Collectors.toList());
 
         return ApiResponse.<List<MessageResponse>>builder()
-            .status("success")
-            .code("SUCCESS")
-            .message("Messages retrieved successfully")
-            .data(responses)
-            .build();
+                .status("success")
+                .code("SUCCESS")
+                .message("Messages retrieved successfully")
+                .data(responses)
+                .build();
     }
 
     private MessageResponse buildMessageResponse(Message message) {
@@ -135,20 +136,20 @@ public class MessageService {
 
     private MessageResponse buildMessageResponse(Message message, User sender) {
         return MessageResponse.builder()
-            .id(message.getId())
-            .conversationId(message.getConversationId())
-            .senderId(message.getSenderId())
-            .senderUsername(sender != null ? sender.getUsername() : null)
-            .senderDisplayName(sender != null ? sender.getDisplayName() : null)
-            .senderAvatarUrl(sender != null ? sender.getAvatarUrl() : null)
-            .type(message.getType())
-            .content(message.getContent())
-            .mediaUrl(message.getMediaUrl())
-            .replyTo(message.getReplyTo())
-            .isDeleted(message.isDeleted())
-            .createdAt(message.getCreatedAt())
-            .updatedAt(message.getUpdatedAt())
-            .build();
+                .id(message.getId())
+                .conversationId(message.getConversationId())
+                .senderId(message.getSenderId())
+                .senderUsername(sender != null ? sender.getUsername() : null)
+                .senderDisplayName(sender != null ? sender.getDisplayName() : null)
+                .senderAvatarUrl(sender != null ? sender.getAvatarUrl() : null)
+                .type(message.getType())
+                .content(message.getContent())
+                .mediaUrl(message.getMediaUrl())
+                .replyTo(message.getReplyTo())
+                .isDeleted(message.isDeleted())
+                .createdAt(message.getCreatedAt() != null ? message.getCreatedAt().toString() : null)
+                .updatedAt(message.getUpdatedAt() != null ? message.getUpdatedAt().toString() : null)
+                .build();
     }
 
     private String getCurrentUserId() {
