@@ -15,6 +15,8 @@ import com.cena.chat_app.repository.ConversationRepository;
 import com.cena.chat_app.repository.MessageRepository;
 import com.cena.chat_app.repository.UserRepository;
 import com.cena.chat_app.websocket.RedisMessagePublisher;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -35,6 +37,7 @@ public class MessageService {
     private final RedisMessagePublisher redisMessagePublisher;
     private final RedisUnreadService redisUnreadService;
     private final RedisUnreadPublisher redisUnreadPublisher;
+    private final Counter messagesSent;
 
     public MessageService(MessageRepository messageRepository,
             ConversationRepository conversationRepository,
@@ -42,7 +45,8 @@ public class MessageService {
             UserRepository userRepository,
             RedisMessagePublisher redisMessagePublisher,
             RedisUnreadService redisUnreadService,
-            RedisUnreadPublisher redisUnreadPublisher) {
+            RedisUnreadPublisher redisUnreadPublisher,
+            MeterRegistry meterRegistry) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
@@ -50,6 +54,7 @@ public class MessageService {
         this.redisMessagePublisher = redisMessagePublisher;
         this.redisUnreadService = redisUnreadService;
         this.redisUnreadPublisher = redisUnreadPublisher;
+        this.messagesSent = meterRegistry.counter("chat.realtime.messages.sent");
     }
 
     public ApiResponse<MessageResponse> sendMessage(SendMessageRequest request) {
@@ -81,6 +86,7 @@ public class MessageService {
                 .build();
 
         message = messageRepository.save(message);
+        messagesSent.increment();
 
         conversation.setLastMessageId(message.getId());
         conversation.setLastMessageAt(message.getCreatedAt());

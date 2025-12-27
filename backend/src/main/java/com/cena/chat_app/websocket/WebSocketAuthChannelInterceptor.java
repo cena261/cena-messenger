@@ -1,6 +1,7 @@
 package com.cena.chat_app.websocket;
 
 import com.cena.chat_app.repository.ConversationMemberRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 
+@Slf4j
 @Component
 public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
     private final ConversationMemberRepository conversationMemberRepository;
@@ -50,8 +52,12 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
                             .findByConversationIdAndUserId(conversationId, userId)
                             .isPresent();
                     if (!isMember) {
+                        log.warn("WebSocket subscription rejected - userId={}, conversationId={}, destination={}",
+                                userId, conversationId, destination);
                         throw new AccessDeniedException("User not member of conversation");
                     }
+                    log.info("WebSocket subscription accepted - userId={}, conversationId={}, destination={}",
+                            userId, conversationId, destination);
                 }
             }
         }
