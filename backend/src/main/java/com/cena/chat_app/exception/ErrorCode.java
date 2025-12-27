@@ -1,7 +1,9 @@
 package com.cena.chat_app.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
+@Getter
 public enum ErrorCode {
     INTERNAL_SERVER_ERROR("INTERNAL_SERVER_ERROR", "An unexpected error occurred", HttpStatus.INTERNAL_SERVER_ERROR),
     UNAUTHORIZED("UNAUTHORIZED", "User not authenticated", HttpStatus.UNAUTHORIZED),
@@ -25,17 +27,5 @@ public enum ErrorCode {
         this.code = code;
         this.message = message;
         this.httpStatus = httpStatus;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public HttpStatus getHttpStatus() {
-        return httpStatus;
     }
 }

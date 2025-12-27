@@ -1,5 +1,10 @@
 package com.cena.chat_app.exception;
 
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter
+@Setter
 public class AppException extends RuntimeException {
     private final ErrorCode errorCode;
 
@@ -16,9 +21,5 @@ public class AppException extends RuntimeException {
     public AppException(ErrorCode errorCode, String message, Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;
-    }
-
-    public ErrorCode getErrorCode() {
-        return errorCode;
     }
 }
