@@ -1,0 +1,12 @@
+spring:
+  data:
+    mongodb:
+      database: chat_app_test
+    redis:
+      host: localhost
+      port: 16379
+
+jwt:
+  secret-key: testsecretkeytestsecretkeytestsecretkeytestsecretkey
+  access-token-validity: 3600000
+  refresh-token-validity: 2592000000
