@@ -16,7 +16,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor;
 
     public WebSocketConfig(JwtWebSocketHandshakeInterceptor jwtWebSocketHandshakeInterceptor,
-                          WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor) {
+            WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor) {
         this.jwtWebSocketHandshakeInterceptor = jwtWebSocketHandshakeInterceptor;
         this.webSocketAuthChannelInterceptor = webSocketAuthChannelInterceptor;
     }
@@ -31,8 +31,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-            .setAllowedOriginPatterns("*")
-            .addInterceptors(jwtWebSocketHandshakeInterceptor);
+                .setAllowedOriginPatterns("*")
+                .addInterceptors(jwtWebSocketHandshakeInterceptor);
     }
 
     @Override

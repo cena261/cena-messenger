@@ -19,7 +19,7 @@ public class JwtWebSocketHandshakeInterceptor implements HandshakeInterceptor {
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
-                                   WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
+            WebSocketHandler wsHandler, Map<String, Object> attributes) throws Exception {
         String query = request.getURI().getQuery();
         if (query != null) {
             String[] params = query.split("&");
@@ -39,6 +39,6 @@ public class JwtWebSocketHandshakeInterceptor implements HandshakeInterceptor {
 
     @Override
     public void afterHandshake(ServerHttpRequest request, ServerHttpResponse response,
-                              WebSocketHandler wsHandler, Exception exception) {
+            WebSocketHandler wsHandler, Exception exception) {
     }
 }

@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
-import org.springframework.messaging.converter.MappingJackson2MessageConverter;
+import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.simp.stomp.StompSessionHandlerAdapter;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
@@ -13,7 +13,6 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -28,7 +27,7 @@ class WebSocketSecurityTest {
     @Test
     void testWebSocketConnectionRejectedWithInvalidToken() {
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
-        stompClient.setMessageConverter(new MappingJackson2MessageConverter());
+        stompClient.setMessageConverter(new JacksonJsonMessageConverter());
 
         String wsUrl = "ws://localhost:" + port + "/ws?token=invalid_token_12345";
 
@@ -41,7 +40,7 @@ class WebSocketSecurityTest {
     @Test
     void testWebSocketConnectionRejectedWithoutToken() {
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
-        stompClient.setMessageConverter(new MappingJackson2MessageConverter());
+        stompClient.setMessageConverter(new JacksonJsonMessageConverter());
 
         String wsUrl = "ws://localhost:" + port + "/ws";
 
@@ -54,7 +53,7 @@ class WebSocketSecurityTest {
     @Test
     void testWebSocketConnectionRejectedWithMalformedToken() {
         WebSocketStompClient stompClient = new WebSocketStompClient(new StandardWebSocketClient());
-        stompClient.setMessageConverter(new MappingJackson2MessageConverter());
+        stompClient.setMessageConverter(new JacksonJsonMessageConverter());
 
         String wsUrl = "ws://localhost:" + port + "/ws?token=not.a.valid.jwt.format";
 
