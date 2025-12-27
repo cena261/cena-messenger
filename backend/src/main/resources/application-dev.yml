@@ -10,3 +10,9 @@ spring:
       password: ${REDIS_PASSWORD}
   mongodb:
     uri: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/${MONGO_DB_NAME}?authSource=admin
+
+jwt:
+  #not really secret i mean
+  secret-key: 1fadac3bc9f37d2730694dccd8da38a03f67be4f89f23ac98306d3c47b71a631
+  access-token-validity: 3600000
+  refresh-token-validity: 2592000000

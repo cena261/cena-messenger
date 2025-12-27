@@ -3,6 +3,7 @@ package com.cena.chat_app.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
@@ -14,15 +15,18 @@ import java.util.Date;
 
 @Component
 public class JwtTokenProvider {
-    private static final String SECRET_KEY = "your-256-bit-secret-key-for-jwt-signing-must-be-at-least-256-bits-long";
-    private static final long ACCESS_TOKEN_VALIDITY = 3600000;
-    private static final long REFRESH_TOKEN_VALIDITY = 2592000000L;
     private final SecretKey key;
     private final SecureRandom secureRandom;
+    private final long accessTokenValidity;
+    private final long refreshTokenValidity;
 
-    public JwtTokenProvider() {
-        this.key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+    public JwtTokenProvider(@Value("${jwt.secret-key}") String secretKey,
+                           @Value("${jwt.access-token-validity}") long accessTokenValidity,
+                           @Value("${jwt.refresh-token-validity}") long refreshTokenValidity) {
+        this.key = Keys.hmacShaKeyFor(secretKey.getBytes(StandardCharsets.UTF_8));
         this.secureRandom = new SecureRandom();
+        this.accessTokenValidity = accessTokenValidity;
+        this.refreshTokenValidity = refreshTokenValidity;
     }
 
     public boolean validateToken(String token) {
@@ -48,7 +52,7 @@ public class JwtTokenProvider {
 
     public String generateAccessToken(String userId) {
         Instant now = Instant.now();
-        Instant expiration = now.plusMillis(ACCESS_TOKEN_VALIDITY);
+        Instant expiration = now.plusMillis(accessTokenValidity);
 
         return Jwts.builder()
             .subject(userId)
@@ -65,10 +69,10 @@ public class JwtTokenProvider {
     }
 
     public long getAccessTokenValidity() {
-        return ACCESS_TOKEN_VALIDITY;
+        return accessTokenValidity;
     }
 
     public Instant getRefreshTokenExpiration() {
-        return Instant.now().plusMillis(REFRESH_TOKEN_VALIDITY);
+        return Instant.now().plusMillis(refreshTokenValidity);
     }
 }
