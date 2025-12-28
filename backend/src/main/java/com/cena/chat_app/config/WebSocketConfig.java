@@ -2,6 +2,7 @@ package com.cena.chat_app.config;
 
 import com.cena.chat_app.websocket.JwtWebSocketHandshakeInterceptor;
 import com.cena.chat_app.websocket.WebSocketAuthChannelInterceptor;
+import com.cena.chat_app.websocket.WebSocketRateLimitInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -14,11 +15,14 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final JwtWebSocketHandshakeInterceptor jwtWebSocketHandshakeInterceptor;
     private final WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor;
+    private final WebSocketRateLimitInterceptor webSocketRateLimitInterceptor;
 
     public WebSocketConfig(JwtWebSocketHandshakeInterceptor jwtWebSocketHandshakeInterceptor,
-            WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor) {
+            WebSocketAuthChannelInterceptor webSocketAuthChannelInterceptor,
+            WebSocketRateLimitInterceptor webSocketRateLimitInterceptor) {
         this.jwtWebSocketHandshakeInterceptor = jwtWebSocketHandshakeInterceptor;
         this.webSocketAuthChannelInterceptor = webSocketAuthChannelInterceptor;
+        this.webSocketRateLimitInterceptor = webSocketRateLimitInterceptor;
     }
 
     @Override
@@ -44,6 +48,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(webSocketAuthChannelInterceptor);
+        registration.interceptors(webSocketRateLimitInterceptor, webSocketAuthChannelInterceptor);
     }
 }
