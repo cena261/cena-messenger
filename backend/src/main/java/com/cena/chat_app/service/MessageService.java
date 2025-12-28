@@ -1,9 +1,12 @@
 package com.cena.chat_app.service;
 
 import com.cena.chat_app.dto.ApiResponse;
+import com.cena.chat_app.dto.request.DeleteMessageRequest;
+import com.cena.chat_app.dto.request.EditMessageRequest;
 import com.cena.chat_app.dto.request.ReactionRequest;
 import com.cena.chat_app.dto.request.SendMessageRequest;
 import com.cena.chat_app.dto.response.MessageResponse;
+import com.cena.chat_app.dto.response.MessageUpdateEventResponse;
 import com.cena.chat_app.dto.response.ReactionEventResponse;
 import com.cena.chat_app.dto.response.UnreadUpdateResponse;
 import com.cena.chat_app.entity.Conversation;
@@ -40,8 +43,11 @@ public class MessageService {
     private final RedisUnreadService redisUnreadService;
     private final RedisUnreadPublisher redisUnreadPublisher;
     private final RedisReactionPublisher redisReactionPublisher;
+    private final RedisMessageUpdatePublisher redisMessageUpdatePublisher;
     private final Counter messagesSent;
     private final Counter reactionsAdded;
+    private final Counter messagesEdited;
+    private final Counter messagesDeleted;
 
     public MessageService(MessageRepository messageRepository,
             ConversationRepository conversationRepository,
@@ -51,6 +57,7 @@ public class MessageService {
             RedisUnreadService redisUnreadService,
             RedisUnreadPublisher redisUnreadPublisher,
             RedisReactionPublisher redisReactionPublisher,
+            RedisMessageUpdatePublisher redisMessageUpdatePublisher,
             MeterRegistry meterRegistry) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
@@ -60,8 +67,11 @@ public class MessageService {
         this.redisUnreadService = redisUnreadService;
         this.redisUnreadPublisher = redisUnreadPublisher;
         this.redisReactionPublisher = redisReactionPublisher;
+        this.redisMessageUpdatePublisher = redisMessageUpdatePublisher;
         this.messagesSent = meterRegistry.counter("chat.realtime.messages.sent");
         this.reactionsAdded = meterRegistry.counter("chat.realtime.reactions.added");
+        this.messagesEdited = meterRegistry.counter("chat.realtime.messages.edited");
+        this.messagesDeleted = meterRegistry.counter("chat.realtime.messages.deleted");
     }
 
     public ApiResponse<MessageResponse> sendMessage(SendMessageRequest request) {
@@ -235,6 +245,103 @@ public class MessageService {
                 .code("SUCCESS")
                 .message(added ? "Reaction added successfully" : "Reaction removed successfully")
                 .data(reactionEvent)
+                .build();
+    }
+
+    public ApiResponse<MessageUpdateEventResponse> editMessage(EditMessageRequest request) {
+        String currentUserId = getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        Message message = messageRepository.findById(request.getMessageId())
+                .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
+
+        conversationMemberRepository.findByConversationIdAndUserId(message.getConversationId(), currentUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
+
+        if (!message.getSenderId().equals(currentUserId)) {
+            throw new AppException(ErrorCode.MESSAGE_EDIT_DENIED);
+        }
+
+        if (message.isDeleted()) {
+            throw new AppException(ErrorCode.MESSAGE_ALREADY_DELETED);
+        }
+
+        if (!"TEXT".equals(message.getType())) {
+            throw new AppException(ErrorCode.MESSAGE_NOT_EDITABLE);
+        }
+
+        message.setContent(request.getContent());
+        message.setUpdatedAt(Instant.now());
+        message = messageRepository.save(message);
+
+        messagesEdited.increment();
+
+        MessageUpdateEventResponse updateEvent = MessageUpdateEventResponse.builder()
+                .action("EDIT")
+                .messageId(message.getId())
+                .conversationId(message.getConversationId())
+                .senderId(currentUserId)
+                .content(message.getContent())
+                .updatedAt(message.getUpdatedAt() != null ? message.getUpdatedAt().toString() : null)
+                .isDeleted(false)
+                .build();
+
+        redisMessageUpdatePublisher.publishMessageUpdate(message.getConversationId(), updateEvent);
+
+        return ApiResponse.<MessageUpdateEventResponse>builder()
+                .status("success")
+                .code("SUCCESS")
+                .message("Message edited successfully")
+                .data(updateEvent)
+                .build();
+    }
+
+    public ApiResponse<MessageUpdateEventResponse> deleteMessage(DeleteMessageRequest request) {
+        String currentUserId = getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        Message message = messageRepository.findById(request.getMessageId())
+                .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
+
+        conversationMemberRepository.findByConversationIdAndUserId(message.getConversationId(), currentUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
+
+        if (!message.getSenderId().equals(currentUserId)) {
+            throw new AppException(ErrorCode.MESSAGE_DELETE_DENIED);
+        }
+
+        if (message.isDeleted()) {
+            throw new AppException(ErrorCode.MESSAGE_ALREADY_DELETED);
+        }
+
+        message.setDeleted(true);
+        message.setContent(null);
+        message.setUpdatedAt(Instant.now());
+        message = messageRepository.save(message);
+
+        messagesDeleted.increment();
+
+        MessageUpdateEventResponse updateEvent = MessageUpdateEventResponse.builder()
+                .action("DELETE")
+                .messageId(message.getId())
+                .conversationId(message.getConversationId())
+                .senderId(currentUserId)
+                .content(null)
+                .updatedAt(message.getUpdatedAt() != null ? message.getUpdatedAt().toString() : null)
+                .isDeleted(true)
+                .build();
+
+        redisMessageUpdatePublisher.publishMessageUpdate(message.getConversationId(), updateEvent);
+
+        return ApiResponse.<MessageUpdateEventResponse>builder()
+                .status("success")
+                .code("SUCCESS")
+                .message("Message deleted successfully")
+                .data(updateEvent)
                 .build();
     }
 
