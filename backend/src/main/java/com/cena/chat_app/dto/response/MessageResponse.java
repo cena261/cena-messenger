@@ -21,6 +21,7 @@ public class MessageResponse {
     private String type;
     private String content;
     private String mediaUrl;
+    private Map<String, Object> mediaMetadata;
     private String replyTo;
     private Map<String, String> reactions;
     private boolean isDeleted;

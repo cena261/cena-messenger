@@ -198,6 +198,7 @@ public class MessageService {
                 .type(message.getType())
                 .content(message.getContent())
                 .mediaUrl(message.getMediaUrl())
+                .mediaMetadata(message.getMediaMetadata())
                 .replyTo(message.getReplyTo())
                 .reactions(message.getReactions())
                 .isDeleted(message.isDeleted())

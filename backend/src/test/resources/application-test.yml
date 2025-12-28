@@ -7,3 +7,10 @@ jwt:
   secret-key: testsecretkeytestsecretkeytestsecretkeytestsecretkey
   access-token-validity: 3600000
   refresh-token-validity: 2592000000
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket-name: chat-media-test
+  presigned-url-expiry: 300
