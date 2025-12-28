@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.Map;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,6 +22,7 @@ public class MessageResponse {
     private String content;
     private String mediaUrl;
     private String replyTo;
+    private Map<String, String> reactions;
     private boolean isDeleted;
     private String createdAt;
     private String updatedAt;

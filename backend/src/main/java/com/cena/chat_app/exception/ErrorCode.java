@@ -14,6 +14,7 @@ public enum ErrorCode {
     INVALID_TARGET_USER("INVALID_TARGET_USER", "Invalid target user", HttpStatus.BAD_REQUEST),
     CONVERSATION_NOT_FOUND("CONVERSATION_NOT_FOUND", "Conversation not found", HttpStatus.NOT_FOUND),
     CONVERSATION_ACCESS_DENIED("CONVERSATION_ACCESS_DENIED", "You do not have access to this conversation", HttpStatus.FORBIDDEN),
+    MESSAGE_NOT_FOUND("MESSAGE_NOT_FOUND", "Message not found", HttpStatus.NOT_FOUND),
     REFRESH_TOKEN_MISSING("REFRESH_TOKEN_MISSING", "Refresh token is missing", HttpStatus.BAD_REQUEST),
     INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "Invalid refresh token", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("REFRESH_TOKEN_REVOKED", "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),

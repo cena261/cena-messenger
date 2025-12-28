@@ -1,8 +1,10 @@
 package com.cena.chat_app.controller;
 
 import com.cena.chat_app.dto.ApiResponse;
+import com.cena.chat_app.dto.request.ReactionRequest;
 import com.cena.chat_app.dto.request.SendMessageRequest;
 import com.cena.chat_app.dto.response.MessageResponse;
+import com.cena.chat_app.dto.response.ReactionEventResponse;
 import com.cena.chat_app.service.MessageService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,5 +33,10 @@ public class MessageController {
             @RequestParam(defaultValue = "50") int size) {
         Pageable pageable = PageRequest.of(page, size);
         return messageService.getMessages(conversationId, pageable);
+    }
+
+    @PostMapping("/reactions")
+    public ApiResponse<ReactionEventResponse> toggleReaction(@RequestBody ReactionRequest request) {
+        return messageService.toggleReaction(request);
     }
 }

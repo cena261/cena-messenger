@@ -1,8 +1,10 @@
 package com.cena.chat_app.service;
 
 import com.cena.chat_app.dto.ApiResponse;
+import com.cena.chat_app.dto.request.ReactionRequest;
 import com.cena.chat_app.dto.request.SendMessageRequest;
 import com.cena.chat_app.dto.response.MessageResponse;
+import com.cena.chat_app.dto.response.ReactionEventResponse;
 import com.cena.chat_app.dto.response.UnreadUpdateResponse;
 import com.cena.chat_app.entity.Conversation;
 import com.cena.chat_app.entity.ConversationMember;
@@ -37,7 +39,9 @@ public class MessageService {
     private final RedisMessagePublisher redisMessagePublisher;
     private final RedisUnreadService redisUnreadService;
     private final RedisUnreadPublisher redisUnreadPublisher;
+    private final RedisReactionPublisher redisReactionPublisher;
     private final Counter messagesSent;
+    private final Counter reactionsAdded;
 
     public MessageService(MessageRepository messageRepository,
             ConversationRepository conversationRepository,
@@ -46,6 +50,7 @@ public class MessageService {
             RedisMessagePublisher redisMessagePublisher,
             RedisUnreadService redisUnreadService,
             RedisUnreadPublisher redisUnreadPublisher,
+            RedisReactionPublisher redisReactionPublisher,
             MeterRegistry meterRegistry) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
@@ -54,7 +59,9 @@ public class MessageService {
         this.redisMessagePublisher = redisMessagePublisher;
         this.redisUnreadService = redisUnreadService;
         this.redisUnreadPublisher = redisUnreadPublisher;
+        this.redisReactionPublisher = redisReactionPublisher;
         this.messagesSent = meterRegistry.counter("chat.realtime.messages.sent");
+        this.reactionsAdded = meterRegistry.counter("chat.realtime.reactions.added");
     }
 
     public ApiResponse<MessageResponse> sendMessage(SendMessageRequest request) {
@@ -172,9 +179,62 @@ public class MessageService {
                 .content(message.getContent())
                 .mediaUrl(message.getMediaUrl())
                 .replyTo(message.getReplyTo())
+                .reactions(message.getReactions())
                 .isDeleted(message.isDeleted())
                 .createdAt(message.getCreatedAt() != null ? message.getCreatedAt().toString() : null)
                 .updatedAt(message.getUpdatedAt() != null ? message.getUpdatedAt().toString() : null)
+                .build();
+    }
+
+    public ApiResponse<ReactionEventResponse> toggleReaction(ReactionRequest request) {
+        String currentUserId = getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+
+        Message message = messageRepository.findById(request.getMessageId())
+                .orElseThrow(() -> new AppException(ErrorCode.MESSAGE_NOT_FOUND));
+
+        conversationMemberRepository.findByConversationIdAndUserId(message.getConversationId(), currentUserId)
+                .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
+
+        Map<String, String> reactions = message.getReactions();
+        if (reactions == null) {
+            reactions = new HashMap<>();
+        }
+
+        boolean added;
+        String existingReaction = reactions.get(currentUserId);
+
+        if (existingReaction != null && existingReaction.equals(request.getReactionType())) {
+            reactions.remove(currentUserId);
+            added = false;
+        } else {
+            reactions.put(currentUserId, request.getReactionType());
+            added = true;
+            reactionsAdded.increment();
+        }
+
+        message.setReactions(reactions.isEmpty() ? null : reactions);
+        message.setUpdatedAt(Instant.now());
+        message = messageRepository.save(message);
+
+        ReactionEventResponse reactionEvent = ReactionEventResponse.builder()
+                .messageId(message.getId())
+                .conversationId(message.getConversationId())
+                .userId(currentUserId)
+                .reactionType(request.getReactionType())
+                .added(added)
+                .allReactions(message.getReactions())
+                .build();
+
+        redisReactionPublisher.publishReactionEvent(message.getConversationId(), reactionEvent);
+
+        return ApiResponse.<ReactionEventResponse>builder()
+                .status("success")
+                .code("SUCCESS")
+                .message(added ? "Reaction added successfully" : "Reaction removed successfully")
+                .data(reactionEvent)
                 .build();
     }
 
