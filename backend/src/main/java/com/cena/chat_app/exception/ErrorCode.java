@@ -19,6 +19,8 @@ public enum ErrorCode {
     MESSAGE_DELETE_DENIED("MESSAGE_DELETE_DENIED", "You can only delete your own messages", HttpStatus.FORBIDDEN),
     MESSAGE_ALREADY_DELETED("MESSAGE_ALREADY_DELETED", "Message has already been deleted", HttpStatus.BAD_REQUEST),
     MESSAGE_NOT_EDITABLE("MESSAGE_NOT_EDITABLE", "Only TEXT messages can be edited", HttpStatus.BAD_REQUEST),
+    REPLY_MESSAGE_NOT_FOUND("REPLY_MESSAGE_NOT_FOUND", "Replied message not found", HttpStatus.NOT_FOUND),
+    REPLY_MESSAGE_DIFFERENT_CONVERSATION("REPLY_MESSAGE_DIFFERENT_CONVERSATION", "Cannot reply to message from different conversation", HttpStatus.BAD_REQUEST),
     REFRESH_TOKEN_MISSING("REFRESH_TOKEN_MISSING", "Refresh token is missing", HttpStatus.BAD_REQUEST),
     INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "Invalid refresh token", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("REFRESH_TOKEN_REVOKED", "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),

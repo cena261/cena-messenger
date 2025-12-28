@@ -92,11 +92,21 @@ public class MessageService {
                     "You do not have permission to send messages in this conversation");
         }
 
+        if (request.getReplyTo() != null && !request.getReplyTo().isEmpty()) {
+            Message repliedMessage = messageRepository.findById(request.getReplyTo())
+                    .orElseThrow(() -> new AppException(ErrorCode.REPLY_MESSAGE_NOT_FOUND));
+
+            if (!repliedMessage.getConversationId().equals(request.getConversationId())) {
+                throw new AppException(ErrorCode.REPLY_MESSAGE_DIFFERENT_CONVERSATION);
+            }
+        }
+
         Message message = Message.builder()
                 .conversationId(request.getConversationId())
                 .senderId(currentUserId)
                 .type("TEXT")
                 .content(request.getContent())
+                .replyTo(request.getReplyTo())
                 .isDeleted(false)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
