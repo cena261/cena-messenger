@@ -1,5 +1,6 @@
 package com.cena.chat_app.config;
 
+import com.cena.chat_app.filter.RateLimitFilter;
 import com.cena.chat_app.security.JwtAuthenticationFilter;
 import com.cena.chat_app.security.JwtTokenProvider;
 import org.springframework.context.annotation.Bean;
@@ -18,10 +19,14 @@ import org.springframework.web.cors.CorsConfigurationSource;
 public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final RateLimitFilter rateLimitFilter;
 
-    public SecurityConfig(JwtTokenProvider jwtTokenProvider, CorsConfigurationSource corsConfigurationSource) {
+    public SecurityConfig(JwtTokenProvider jwtTokenProvider,
+                         CorsConfigurationSource corsConfigurationSource,
+                         RateLimitFilter rateLimitFilter) {
         this.jwtTokenProvider = jwtTokenProvider;
         this.corsConfigurationSource = corsConfigurationSource;
+        this.rateLimitFilter = rateLimitFilter;
     }
 
     @Bean
@@ -34,7 +39,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html", "/api/auth/**", "/ws/**").permitAll()
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(new JwtAuthenticationFilter(jwtTokenProvider), UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
