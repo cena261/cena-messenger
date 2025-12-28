@@ -31,14 +31,21 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
         if (accessor != null) {
             if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+                log.info("STOMP CONNECT command received");
                 if (accessor.getSessionAttributes() != null) {
+                    log.info("Session attributes: {}", accessor.getSessionAttributes());
                     String userId = (String) accessor.getSessionAttributes().get("userId");
                     if (userId != null) {
+                        log.info("Setting authentication for userId: {}", userId);
                         UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
                                 userId, null, Collections.emptyList());
                         SecurityContextHolder.getContext().setAuthentication(auth);
                         accessor.setUser(auth);
+                    } else {
+                        log.warn("userId not found in session attributes");
                     }
+                } else {
+                    log.warn("Session attributes is null");
                 }
             } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
                 String destination = accessor.getDestination();

@@ -48,6 +48,7 @@ public class ConversationService {
 
     public ApiResponse<ConversationResponse> createDirectConversation(CreateDirectConversationRequest request) {
         String currentUserId = getCurrentUserId();
+
         if (currentUserId == null) {
             return ApiResponse.<ConversationResponse>builder()
                 .status("error")

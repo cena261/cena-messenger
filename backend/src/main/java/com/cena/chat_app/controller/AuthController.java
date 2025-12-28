@@ -25,8 +25,8 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ApiResponse<UserProfileResponse> register(@RequestBody RegisterRequest request) {
-        return authService.register(request);
+    public ApiResponse<AuthResponse> register(@RequestBody RegisterRequest request, HttpServletResponse response) {
+        return authService.register(request, response);
     }
 
     @PostMapping("/login")

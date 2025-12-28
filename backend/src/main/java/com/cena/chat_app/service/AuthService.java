@@ -38,9 +38,9 @@ public class AuthService {
         this.jwtTokenProvider = jwtTokenProvider;
     }
 
-    public ApiResponse<UserProfileResponse> register(RegisterRequest request) {
+    public ApiResponse<AuthResponse> register(RegisterRequest request, HttpServletResponse response) {
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            return ApiResponse.<UserProfileResponse>builder()
+            return ApiResponse.<AuthResponse>builder()
                 .status("error")
                 .code("USERNAME_EXISTS")
                 .message("Username already exists")
@@ -59,6 +59,25 @@ public class AuthService {
 
         user = userRepository.save(user);
 
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId());
+        String refreshTokenValue = jwtTokenProvider.generateRefreshToken();
+
+        RefreshToken refreshToken = RefreshToken.builder()
+            .userId(user.getId())
+            .token(refreshTokenValue)
+            .deviceId(UUID.randomUUID().toString())
+            .expiredAt(jwtTokenProvider.getRefreshTokenExpiration())
+            .revoked(false)
+            .build();
+
+        refreshTokenRepository.save(refreshToken);
+
+        Cookie cookie = new Cookie(REFRESH_TOKEN_COOKIE_NAME, refreshTokenValue);
+        cookie.setHttpOnly(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(REFRESH_TOKEN_COOKIE_MAX_AGE);
+        response.addCookie(cookie);
+
         UserProfileResponse userProfile = UserProfileResponse.builder()
             .id(user.getId())
             .username(user.getUsername())
@@ -67,11 +86,18 @@ public class AuthService {
             .avatarUrl(user.getAvatarUrl())
             .build();
 
-        return ApiResponse.<UserProfileResponse>builder()
+        AuthResponse authResponse = AuthResponse.builder()
+            .accessToken(accessToken)
+            .tokenType("Bearer")
+            .expiresIn(jwtTokenProvider.getAccessTokenValidity() / 1000)
+            .user(userProfile)
+            .build();
+
+        return ApiResponse.<AuthResponse>builder()
             .status("success")
             .code("SUCCESS")
             .message("User registered successfully")
-            .data(userProfile)
+            .data(authResponse)
             .build();
     }
 

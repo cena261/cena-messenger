@@ -29,10 +29,13 @@ public class RedisUnreadPublisher {
 
     public void publishUnreadUpdate(String userId, UnreadUpdateResponse update) {
         String channel = CHANNEL_PREFIX + userId + CHANNEL_SUFFIX;
+        log.info("Publishing unread update - userId={}, channel={}, conversationId={}, unreadCount={}",
+                userId, channel, update.getConversationId(), update.getUnreadCount());
         try {
             String payload = objectMapper.writeValueAsString(update);
             redisTemplate.convertAndSend(channel, payload);
             unreadUpdatesPublished.increment();
+            log.info("Unread update published successfully - userId={}", userId);
         } catch (JacksonException e) {
             publishFailures.increment();
             log.error("Failed to publish unread update to Redis - userId={}, channel={}, error={}",
