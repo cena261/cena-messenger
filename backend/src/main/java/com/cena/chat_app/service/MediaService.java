@@ -52,6 +52,7 @@ public class MediaService {
     private final UserRepository userRepository;
     private final RedisMessagePublisher redisMessagePublisher;
     private final RedisUnreadService redisUnreadService;
+    private final BlockingService blockingService;
     private final Counter mediaMessagesCreated;
 
     public MediaService(MinioService minioService,
@@ -61,6 +62,7 @@ public class MediaService {
                         UserRepository userRepository,
                         RedisMessagePublisher redisMessagePublisher,
                         RedisUnreadService redisUnreadService,
+                        BlockingService blockingService,
                         MeterRegistry meterRegistry) {
         this.minioService = minioService;
         this.conversationRepository = conversationRepository;
@@ -69,6 +71,7 @@ public class MediaService {
         this.userRepository = userRepository;
         this.redisMessagePublisher = redisMessagePublisher;
         this.redisUnreadService = redisUnreadService;
+        this.blockingService = blockingService;
         this.mediaMessagesCreated = meterRegistry.counter("chat.realtime.media.messages.created");
     }
 
@@ -126,6 +129,25 @@ public class MediaService {
         if (!membership.isCanSendMessage()) {
             throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED,
                     "You do not have permission to send messages in this conversation");
+        }
+
+        if ("DIRECT".equals(conversation.getType())) {
+            List<ConversationMember> members = conversationMemberRepository.findByConversationId(request.getConversationId());
+            for (ConversationMember member : members) {
+                if (!member.getUserId().equals(currentUserId)) {
+                    if (blockingService.areUsersBlockedEitherWay(currentUserId, member.getUserId())) {
+                        throw new AppException(ErrorCode.USER_BLOCKED);
+                    }
+                }
+            }
+        } else if ("GROUP".equals(conversation.getType())) {
+            List<ConversationMember> members = conversationMemberRepository.findByConversationId(request.getConversationId());
+            List<String> memberIds = members.stream()
+                    .map(ConversationMember::getUserId)
+                    .collect(java.util.stream.Collectors.toList());
+            if (blockingService.isBlockedByAnyMember(currentUserId, memberIds)) {
+                throw new AppException(ErrorCode.BLOCKED_BY_USER);
+            }
         }
 
         if (request.getReplyTo() != null && !request.getReplyTo().isEmpty()) {

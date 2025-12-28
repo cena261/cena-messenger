@@ -31,19 +31,22 @@ public class ConversationService {
     private final RedisUnreadService redisUnreadService;
     private final RedisUnreadPublisher redisUnreadPublisher;
     private final RedisSeenPublisher redisSeenPublisher;
+    private final BlockingService blockingService;
 
     public ConversationService(ConversationRepository conversationRepository,
                               ConversationMemberRepository conversationMemberRepository,
                               UserRepository userRepository,
                               RedisUnreadService redisUnreadService,
                               RedisUnreadPublisher redisUnreadPublisher,
-                              RedisSeenPublisher redisSeenPublisher) {
+                              RedisSeenPublisher redisSeenPublisher,
+                              BlockingService blockingService) {
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
         this.userRepository = userRepository;
         this.redisUnreadService = redisUnreadService;
         this.redisUnreadPublisher = redisUnreadPublisher;
         this.redisSeenPublisher = redisSeenPublisher;
+        this.blockingService = blockingService;
     }
 
     public ApiResponse<ConversationResponse> createDirectConversation(CreateDirectConversationRequest request) {
@@ -71,6 +74,14 @@ public class ConversationService {
                 .status("error")
                 .code("USER_NOT_FOUND")
                 .message("Target user not found")
+                .build();
+        }
+
+        if (blockingService.areUsersBlockedEitherWay(currentUserId, request.getTargetUserId())) {
+            return ApiResponse.<ConversationResponse>builder()
+                .status("error")
+                .code("USER_BLOCKED")
+                .message("Cannot create conversation with blocked user")
                 .build();
         }
 
@@ -160,6 +171,9 @@ public class ConversationService {
         if (request.getMemberIds() != null && !request.getMemberIds().isEmpty()) {
             for (String memberId : request.getMemberIds()) {
                 if (!memberId.equals(currentUserId)) {
+                    if (blockingService.areUsersBlockedEitherWay(currentUserId, memberId)) {
+                        continue;
+                    }
                     ConversationMember member = ConversationMember.builder()
                         .conversationId(conversation.getId())
                         .userId(memberId)

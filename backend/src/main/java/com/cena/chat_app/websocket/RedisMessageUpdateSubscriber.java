@@ -1,8 +1,11 @@
 package com.cena.chat_app.websocket;
 
 import com.cena.chat_app.dto.response.MessageUpdateEventResponse;
+import com.cena.chat_app.entity.Conversation;
 import com.cena.chat_app.entity.ConversationMember;
 import com.cena.chat_app.repository.ConversationMemberRepository;
+import com.cena.chat_app.repository.ConversationRepository;
+import com.cena.chat_app.service.BlockingService;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.connection.Message;
@@ -21,13 +24,19 @@ public class RedisMessageUpdateSubscriber implements MessageListener {
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
     private final ConversationMemberRepository conversationMemberRepository;
+    private final ConversationRepository conversationRepository;
+    private final BlockingService blockingService;
 
     public RedisMessageUpdateSubscriber(SimpMessagingTemplate messagingTemplate,
                                         ObjectMapper objectMapper,
-                                        ConversationMemberRepository conversationMemberRepository) {
+                                        ConversationMemberRepository conversationMemberRepository,
+                                        ConversationRepository conversationRepository,
+                                        BlockingService blockingService) {
         this.messagingTemplate = messagingTemplate;
         this.objectMapper = objectMapper;
         this.conversationMemberRepository = conversationMemberRepository;
+        this.conversationRepository = conversationRepository;
+        this.blockingService = blockingService;
     }
 
     @Override

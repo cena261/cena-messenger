@@ -44,6 +44,7 @@ public class MessageService {
     private final RedisUnreadPublisher redisUnreadPublisher;
     private final RedisReactionPublisher redisReactionPublisher;
     private final RedisMessageUpdatePublisher redisMessageUpdatePublisher;
+    private final BlockingService blockingService;
     private final Counter messagesSent;
     private final Counter reactionsAdded;
     private final Counter messagesEdited;
@@ -58,6 +59,7 @@ public class MessageService {
             RedisUnreadPublisher redisUnreadPublisher,
             RedisReactionPublisher redisReactionPublisher,
             RedisMessageUpdatePublisher redisMessageUpdatePublisher,
+            BlockingService blockingService,
             MeterRegistry meterRegistry) {
         this.messageRepository = messageRepository;
         this.conversationRepository = conversationRepository;
@@ -68,6 +70,7 @@ public class MessageService {
         this.redisUnreadPublisher = redisUnreadPublisher;
         this.redisReactionPublisher = redisReactionPublisher;
         this.redisMessageUpdatePublisher = redisMessageUpdatePublisher;
+        this.blockingService = blockingService;
         this.messagesSent = meterRegistry.counter("chat.realtime.messages.sent");
         this.reactionsAdded = meterRegistry.counter("chat.realtime.reactions.added");
         this.messagesEdited = meterRegistry.counter("chat.realtime.messages.edited");
@@ -90,6 +93,25 @@ public class MessageService {
         if (!membership.isCanSendMessage()) {
             throw new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED,
                     "You do not have permission to send messages in this conversation");
+        }
+
+        if ("DIRECT".equals(conversation.getType())) {
+            List<ConversationMember> members = conversationMemberRepository.findByConversationId(request.getConversationId());
+            for (ConversationMember member : members) {
+                if (!member.getUserId().equals(currentUserId)) {
+                    if (blockingService.areUsersBlockedEitherWay(currentUserId, member.getUserId())) {
+                        throw new AppException(ErrorCode.USER_BLOCKED);
+                    }
+                }
+            }
+        } else if ("GROUP".equals(conversation.getType())) {
+            List<ConversationMember> members = conversationMemberRepository.findByConversationId(request.getConversationId());
+            List<String> memberIds = members.stream()
+                    .map(ConversationMember::getUserId)
+                    .collect(java.util.stream.Collectors.toList());
+            if (blockingService.isBlockedByAnyMember(currentUserId, memberIds)) {
+                throw new AppException(ErrorCode.BLOCKED_BY_USER);
+            }
         }
 
         if (request.getReplyTo() != null && !request.getReplyTo().isEmpty()) {
