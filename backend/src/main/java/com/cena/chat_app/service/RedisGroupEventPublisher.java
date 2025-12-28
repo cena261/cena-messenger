@@ -1,0 +1,43 @@
+package com.cena.chat_app.service;
+
+import com.cena.chat_app.dto.response.GroupEventResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import lombok.extern.slf4j.Slf4j;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Service;
+
+@Slf4j
+@Service
+public class RedisGroupEventPublisher {
+    private static final String CHANNEL_PREFIX = "conversation:";
+    private static final String CHANNEL_SUFFIX = ":group-events";
+
+    private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
+    private final Counter groupEventsPublished;
+    private final Counter publishFailures;
+
+    public RedisGroupEventPublisher(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
+        this.groupEventsPublished = meterRegistry.counter("chat.realtime.group.events.published");
+        this.publishFailures = meterRegistry.counter("chat.realtime.redis.publish.failures", "type", "group-event");
+    }
+
+    public void publishGroupEvent(String conversationId, GroupEventResponse event) {
+        String channel = CHANNEL_PREFIX + conversationId + CHANNEL_SUFFIX;
+        try {
+            String payload = objectMapper.writeValueAsString(event);
+            redisTemplate.convertAndSend(channel, payload);
+            groupEventsPublished.increment();
+        } catch (JacksonException e) {
+            publishFailures.increment();
+            log.error("Failed to publish group event to Redis - conversationId={}, channel={}, error={}",
+                    conversationId, channel, e.getMessage(), e);
+            throw new RuntimeException("Failed to serialize group event", e);
+        }
+    }
+}

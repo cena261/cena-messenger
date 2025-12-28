@@ -1,5 +1,6 @@
 package com.cena.chat_app.config;
 
+import com.cena.chat_app.websocket.RedisGroupEventSubscriber;
 import com.cena.chat_app.websocket.RedisMessageSubscriber;
 import com.cena.chat_app.websocket.RedisMessageUpdateSubscriber;
 import com.cena.chat_app.websocket.RedisReactionSubscriber;
@@ -37,7 +38,8 @@ public class RedisConfig {
             RedisSeenSubscriber seenSubscriber,
             RedisTypingSubscriber typingSubscriber,
             RedisReactionSubscriber reactionSubscriber,
-            RedisMessageUpdateSubscriber messageUpdateSubscriber) {
+            RedisMessageUpdateSubscriber messageUpdateSubscriber,
+            RedisGroupEventSubscriber groupEventSubscriber) {
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.addMessageListener(messageSubscriber, messageSubscriber.getChannelPattern());
@@ -46,6 +48,7 @@ public class RedisConfig {
         container.addMessageListener(typingSubscriber, typingSubscriber.getChannelPattern());
         container.addMessageListener(reactionSubscriber, reactionSubscriber.getChannelPattern());
         container.addMessageListener(messageUpdateSubscriber, messageUpdateSubscriber.getChannelPattern());
+        container.addMessageListener(groupEventSubscriber, groupEventSubscriber.getChannelPattern());
         return container;
     }
 }
