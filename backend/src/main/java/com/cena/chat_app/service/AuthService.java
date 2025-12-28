@@ -39,7 +39,11 @@ public class AuthService {
     }
 
     public ApiResponse<AuthResponse> register(RegisterRequest request, HttpServletResponse response) {
-        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
+        String normalizedUsername = request.getUsername().toLowerCase().trim();
+        String normalizedEmail = request.getEmail().toLowerCase().trim();
+        String normalizedPhone = normalizePhone(request.getPhone());
+
+        if (userRepository.findByUsername(normalizedUsername).isPresent()) {
             return ApiResponse.<AuthResponse>builder()
                 .status("error")
                 .code("USERNAME_EXISTS")
@@ -47,11 +51,30 @@ public class AuthService {
                 .build();
         }
 
+        if (userRepository.findByEmail(normalizedEmail).isPresent()) {
+            return ApiResponse.<AuthResponse>builder()
+                .status("error")
+                .code("EMAIL_EXISTS")
+                .message("Email already exists")
+                .build();
+        }
+
+        if (normalizedPhone != null) {
+            if (userRepository.findByPhone(normalizedPhone).isPresent()) {
+                return ApiResponse.<AuthResponse>builder()
+                    .status("error")
+                    .code("PHONE_EXISTS")
+                    .message("Phone number already exists")
+                    .build();
+            }
+        }
+
         User user = User.builder()
-            .username(request.getUsername())
+            .username(normalizedUsername)
             .passwordHash(passwordEncoder.encode(request.getPassword()))
             .displayName(request.getDisplayName())
-            .email(request.getEmail())
+            .email(normalizedEmail)
+            .phone(normalizedPhone)
             .status("ACTIVE")
             .createdAt(Instant.now())
             .updatedAt(Instant.now())
@@ -102,7 +125,8 @@ public class AuthService {
     }
 
     public ApiResponse<AuthResponse> login(LoginRequest request, HttpServletResponse response) {
-        User user = userRepository.findByUsername(request.getUsername())
+        String normalizedUsername = request.getUsername().toLowerCase().trim();
+        User user = userRepository.findByUsername(normalizedUsername)
             .orElse(null);
 
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -247,5 +271,13 @@ public class AuthService {
             .code("SUCCESS")
             .message("Logout successful")
             .build();
+    }
+
+    private String normalizePhone(String phone) {
+        if (phone == null) {
+            return null;
+        }
+        String trimmed = phone.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }
