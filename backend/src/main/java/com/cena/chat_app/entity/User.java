@@ -24,7 +24,13 @@ public class User {
 
     private String passwordHash;
     private String displayName;
+
+    @Indexed(unique = true)
     private String email;
+
+    @Indexed(unique = true, sparse = true)
+    private String phone;
+
     private String avatarUrl;
     private String description;
     private String status;
