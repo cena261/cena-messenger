@@ -1,34 +1,9 @@
 <template>
   <div class="conversations-container">
-    <div class="conversations-sidebar">
-      <div class="sidebar-header">
+    <div class="conversations-list">
+      <div class="list-header">
         <h2>Conversations</h2>
         <button @click="handleLogout" class="logout-btn">Logout</button>
-      </div>
-
-      <div class="user-info">
-        <div class="user-name">{{ authStore.user?.displayName }}</div>
-        <div class="user-id">
-          <span class="label">Your ID:</span>
-          <code @click="copyUserId">{{ authStore.user?.id }}</code>
-        </div>
-        <div v-if="copied" class="copied-message">ID copied!</div>
-      </div>
-
-      <div class="create-conversation">
-        <h3>New Conversation</h3>
-        <form @submit.prevent="handleCreateConversation">
-          <input
-            v-model="newConversation.recipientUserId"
-            type="text"
-            placeholder="Enter User ID"
-            required
-          />
-          <button type="submit" :disabled="isCreating">
-            {{ isCreating ? 'Creating...' : 'Create' }}
-          </button>
-        </form>
-        <div v-if="createError" class="error">{{ createError }}</div>
       </div>
 
       <div v-if="conversationsStore.isLoading" class="loading">
@@ -39,130 +14,167 @@
         {{ conversationsStore.error }}
       </div>
 
-      <div v-else class="conversation-list">
+      <div v-else-if="conversationsStore.conversations.length === 0" class="empty">
+        No conversations yet
+      </div>
+
+      <div v-else class="conversation-items">
         <div
           v-for="conversation in conversationsStore.conversations"
           :key="conversation.id"
-          class="conversation-item"
-          :class="{ active: conversation.id === conversationsStore.activeConversationId }"
-          @click="selectConversation(conversation.id)"
+          :class="['conversation-item', { active: conversation.id === conversationsStore.activeConversationId }]"
+          @click="handleSelectConversation(conversation.id)"
         >
-          <div class="conversation-info">
-            <div class="conversation-name">
-              {{ conversation.name || 'Direct Message' }}
-            </div>
-            <div v-if="conversation.lastMessageContent" class="last-message">
-              {{ conversation.lastMessageContent }}
+          <div class="conversation-avatar">
+            <img
+              v-if="conversation.avatarUrl"
+              :src="conversation.avatarUrl"
+              :alt="getConversationDisplayName(conversation)"
+            />
+            <div v-else class="avatar-placeholder">
+              {{ getConversationInitial(conversation) }}
             </div>
           </div>
-          <div v-if="conversation.unreadCount > 0" class="unread-badge">
-            {{ conversation.unreadCount }}
-          </div>
-        </div>
 
-        <div v-if="conversationsStore.conversations.length === 0" class="no-conversations">
-          No conversations yet. Create one above!
+          <div class="conversation-info">
+            <div class="conversation-header">
+              <span class="conversation-name">{{ getConversationDisplayName(conversation) }}</span>
+              <span v-if="conversation.lastMessageAt" class="conversation-time">
+                {{ formatTime(conversation.lastMessageAt) }}
+              </span>
+            </div>
+
+            <div class="conversation-preview">
+              <span class="preview-text">{{ getLastMessagePreview(conversation) }}</span>
+              <span v-if="conversation.unreadCount > 0" class="unread-badge">
+                {{ conversation.unreadCount }}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="chat-area">
-      <router-view />
+    <div class="conversation-detail">
+      <div v-if="!conversationsStore.activeConversationId" class="empty-state">
+        <p>Select a conversation to view</p>
+      </div>
+
+      <div v-else class="selected-conversation">
+        <h3>Conversation Selected</h3>
+        <p><strong>ID:</strong> {{ conversationsStore.activeConversationId }}</p>
+        <p v-if="conversationsStore.activeConversation">
+          <strong>Name:</strong> {{ getConversationDisplayName(conversationsStore.activeConversation) }}
+        </p>
+        <p v-if="conversationsStore.activeConversation">
+          <strong>Type:</strong> {{ conversationsStore.activeConversation.type }}
+        </p>
+        <p v-if="conversationsStore.activeConversation">
+          <strong>Members:</strong> {{ conversationsStore.activeConversation.members?.length || 0 }}
+        </p>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
-import { useRealtimeStore } from '../stores/realtime'
+import websocketService from '../services/websocket'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
-const realtimeStore = useRealtimeStore()
 
-const newConversation = ref({
-  recipientUserId: ''
-})
-const isCreating = ref(false)
-const createError = ref(null)
-const copied = ref(false)
+let unreadSubscription = null
+let seenSubscription = null
 
-onMounted(async () => {
-  try {
-    await conversationsStore.fetchConversations()
-    realtimeStore.initializeSubscriptions()
-  } catch (error) {
-    console.error('Failed to load conversations:', error)
+function getConversationDisplayName(conversation) {
+  if (conversation.type === 'GROUP') {
+    return conversation.name || 'Unnamed Group'
   }
-})
 
-function selectConversation(conversationId) {
-  conversationsStore.setActiveConversation(conversationId)
-  router.push(`/conversations/${conversationId}`)
+  const otherMember = conversation.members?.find(m => m.userId !== authStore.user?.id)
+  return otherMember?.displayName || otherMember?.username || 'Unknown User'
 }
 
-async function handleCreateConversation() {
-  if (!newConversation.value.recipientUserId.trim()) {
-    createError.value = 'Please enter a user ID'
-    return
+function getConversationInitial(conversation) {
+  const name = getConversationDisplayName(conversation)
+  return name.charAt(0).toUpperCase()
+}
+
+function getLastMessagePreview(conversation) {
+  if (!conversation.lastMessageAt) {
+    return 'No messages yet'
   }
+  return 'Last message...'
+}
 
-  isCreating.value = true
-  createError.value = null
+function formatTime(timestamp) {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffInHours = (now - date) / (1000 * 60 * 60)
 
-  try {
-    const response = await conversationsStore.createConversation(
-      'DIRECT',
-      [newConversation.value.recipientUserId.trim()]
-    )
-
-    newConversation.value.recipientUserId = ''
-
-    await conversationsStore.fetchConversations()
-
-    selectConversation(response.id)
-  } catch (error) {
-    createError.value = error.response?.data?.message || 'Failed to create conversation'
-  } finally {
-    isCreating.value = false
+  if (diffInHours < 24) {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  } else {
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 }
 
-function copyUserId() {
-  if (authStore.user?.id) {
-    navigator.clipboard.writeText(authStore.user.id)
-    copied.value = true
-    setTimeout(() => {
-      copied.value = false
-    }, 2000)
-  }
+async function handleSelectConversation(conversationId) {
+  await conversationsStore.selectConversation(conversationId)
 }
 
 async function handleLogout() {
   await authStore.logout()
   router.push('/login')
 }
+
+onMounted(async () => {
+  await conversationsStore.fetchConversations()
+
+  unreadSubscription = websocketService.subscribeToUnreadUpdates((unreadUpdate) => {
+    console.log('Unread update received:', unreadUpdate)
+    conversationsStore.updateConversationUnreadCount(
+      unreadUpdate.conversationId,
+      unreadUpdate.unreadCount
+    )
+  })
+
+  seenSubscription = websocketService.subscribeToSeenEvents((seenEvent) => {
+    conversationsStore.handleSeenEvent(seenEvent)
+  })
+})
+
+onUnmounted(() => {
+  if (unreadSubscription) {
+    websocketService.unsubscribe('/user/queue/unread')
+  }
+  if (seenSubscription) {
+    websocketService.unsubscribe('/user/queue/seen')
+  }
+})
 </script>
 
 <style scoped>
 .conversations-container {
   display: flex;
   height: 100vh;
+  overflow: hidden;
 }
 
-.conversations-sidebar {
-  width: 300px;
+.conversations-list {
+  width: 350px;
   border-right: 1px solid #ddd;
   display: flex;
   flex-direction: column;
-  background-color: #f9f9f9;
+  background-color: white;
 }
 
-.sidebar-header {
+.list-header {
   padding: 1rem;
   border-bottom: 1px solid #ddd;
   display: flex;
@@ -170,7 +182,7 @@ async function handleLogout() {
   align-items: center;
 }
 
-.sidebar-header h2 {
+.list-header h2 {
   margin: 0;
   font-size: 1.25rem;
   color: #333;
@@ -182,138 +194,70 @@ async function handleLogout() {
   color: white;
   border: none;
   border-radius: 4px;
-  cursor: pointer;
   font-size: 0.875rem;
+  cursor: pointer;
 }
 
 .logout-btn:hover {
   background-color: #d32f2f;
 }
 
-.user-info {
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
-  background-color: #f0f7ff;
-}
-
-.user-name {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 0.5rem;
-}
-
-.user-id {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.user-id .label {
-  color: #666;
-}
-
-.user-id code {
-  background-color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 3px;
-  border: 1px solid #ddd;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.user-id code:hover {
-  background-color: #e3f2fd;
-}
-
-.copied-message {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: #4CAF50;
-  font-weight: 500;
-}
-
-.create-conversation {
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
-  background-color: white;
-}
-
-.create-conversation h3 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.875rem;
-  color: #666;
-  text-transform: uppercase;
-}
-
-.create-conversation form {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.create-conversation input {
-  flex: 1;
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.875rem;
-}
-
-.create-conversation button {
-  padding: 0.5rem 1rem;
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.create-conversation button:hover {
-  background-color: #1976D2;
-}
-
-.create-conversation button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
 .loading,
 .error,
-.no-conversations {
-  padding: 1rem;
+.empty {
+  padding: 2rem;
   text-align: center;
   color: #666;
 }
 
 .error {
   color: #c33;
-  font-size: 0.875rem;
-  margin-top: 0.5rem;
 }
 
-.conversation-list {
+.conversation-items {
   flex: 1;
   overflow-y: auto;
 }
 
 .conversation-item {
-  padding: 1rem;
-  border-bottom: 1px solid #eee;
-  cursor: pointer;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .conversation-item:hover {
-  background-color: #f0f0f0;
+  background-color: #f5f5f5;
 }
 
 .conversation-item.active {
   background-color: #e3f2fd;
+}
+
+.conversation-avatar {
+  flex-shrink: 0;
+  margin-right: 1rem;
+}
+
+.conversation-avatar img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #4CAF50;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 500;
 }
 
 .conversation-info {
@@ -321,35 +265,92 @@ async function handleLogout() {
   min-width: 0;
 }
 
-.conversation-name {
-  font-weight: 500;
-  color: #333;
+.conversation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
   margin-bottom: 0.25rem;
 }
 
-.last-message {
-  font-size: 0.875rem;
-  color: #666;
-  white-space: nowrap;
+.conversation-name {
+  font-weight: 500;
+  color: #333;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-time {
+  font-size: 0.75rem;
+  color: #999;
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+.conversation-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-text {
+  font-size: 0.875rem;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
 
 .unread-badge {
   background-color: #4CAF50;
   color: white;
   border-radius: 12px;
-  padding: 0.25rem 0.5rem;
+  padding: 0.125rem 0.5rem;
   font-size: 0.75rem;
-  font-weight: bold;
-  min-width: 20px;
-  text-align: center;
+  font-weight: 500;
+  margin-left: 0.5rem;
+  flex-shrink: 0;
 }
 
-.chat-area {
+.conversation-detail {
   flex: 1;
+  background-color: #fafafa;
   display: flex;
-  flex-direction: column;
-  background-color: white;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-state {
+  text-align: center;
+  color: #999;
+}
+
+.empty-state p {
+  font-size: 1.125rem;
+}
+
+.selected-conversation {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 100%;
+}
+
+.selected-conversation h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: #333;
+}
+
+.selected-conversation p {
+  margin: 0.75rem 0;
+  color: #666;
+}
+
+.selected-conversation strong {
+  color: #333;
 }
 </style>

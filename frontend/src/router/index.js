@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
-import HomeView from '../views/HomeView.vue'
+import ConversationsView from '../views/ConversationsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -16,9 +16,9 @@ const router = createRouter({
       component: LoginView
     },
     {
-      path: '/home',
-      name: 'home',
-      component: HomeView,
+      path: '/conversations',
+      name: 'conversations',
+      component: ConversationsView,
       meta: { requiresAuth: true }
     }
   ]
@@ -35,7 +35,7 @@ router.beforeEach(async (to, from, next) => {
       next('/login')
     }
   } else if (to.path === '/login' && authStore.isAuthenticated) {
-    next('/home')
+    next('/conversations')
   } else {
     next()
   }

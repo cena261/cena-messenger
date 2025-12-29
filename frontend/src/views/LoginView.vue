@@ -108,7 +108,7 @@ async function handleSubmit() {
       await authStore.login(username.value, password.value)
     }
 
-    router.push('/home')
+    router.push('/conversations')
   } catch (err) {
     error.value = err.response?.data?.message || 'Authentication failed'
   } finally {

@@ -49,16 +49,11 @@ export const useConversationsStore = defineStore('conversations', () => {
 
   async function markAsRead(conversationId) {
     try {
-      console.log('markAsRead called for conversationId:', conversationId)
       await conversationsApi.markConversationAsRead(conversationId)
-      console.log('markAsRead API call successful')
 
       const conversation = conversations.value.find(c => c.id === conversationId)
       if (conversation) {
-        console.log('Updating local unread count from', conversation.unreadCount, 'to 0')
         conversation.unreadCount = 0
-      } else {
-        console.log('Conversation not found in local store')
       }
     } catch (err) {
       console.error('Failed to mark conversation as read:', err)
@@ -66,8 +61,9 @@ export const useConversationsStore = defineStore('conversations', () => {
     }
   }
 
-  function setActiveConversation(conversationId) {
+  async function selectConversation(conversationId) {
     activeConversationId.value = conversationId
+    await markAsRead(conversationId)
   }
 
   function updateConversationUnreadCount(conversationId, unreadCount) {
@@ -77,12 +73,8 @@ export const useConversationsStore = defineStore('conversations', () => {
     }
   }
 
-  function updateConversationLastMessage(conversationId, message) {
-    const conversation = conversations.value.find(c => c.id === conversationId)
-    if (conversation) {
-      conversation.lastMessageContent = message.content
-      conversation.lastMessageAt = message.createdAt
-    }
+  function handleSeenEvent(seenEvent) {
+    console.log('Seen event received:', seenEvent)
   }
 
   return {
@@ -93,9 +85,8 @@ export const useConversationsStore = defineStore('conversations', () => {
     error,
     fetchConversations,
     createConversation,
-    markAsRead,
-    setActiveConversation,
+    selectConversation,
     updateConversationUnreadCount,
-    updateConversationLastMessage
+    handleSeenEvent
   }
 })

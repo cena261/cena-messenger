@@ -109,6 +109,14 @@ class WebSocketService {
   isConnected() {
     return this.connected
   }
+
+  subscribeToUnreadUpdates(callback) {
+    return this.subscribe('/user/queue/unread', callback)
+  }
+
+  subscribeToSeenEvents(callback) {
+    return this.subscribe('/user/queue/seen', callback)
+  }
 }
 
 export default new WebSocketService()
