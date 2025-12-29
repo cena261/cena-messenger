@@ -3,6 +3,13 @@ spring:
     mongodb:
       database: chat_app_test
 
+  mail:
+    host: localhost
+    port: 1025
+    username: test
+    password: test
+    from: test@example.com
+
 jwt:
   secret-key: testsecretkeytestsecretkeytestsecretkeytestsecretkey
   access-token-validity: 3600000

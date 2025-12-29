@@ -87,6 +87,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new RateLimitConfig("auth_login", AUTH_MAX_REQUESTS_PER_MINUTE, true, "auth");
         } else if (uri.startsWith("/api/auth/register") && "POST".equals(method)) {
             return new RateLimitConfig("auth_register", AUTH_MAX_REQUESTS_PER_MINUTE, true, "auth");
+        } else if (uri.startsWith("/api/auth/forgot-password") && "POST".equals(method)) {
+            return new RateLimitConfig("auth_forgot_password", AUTH_MAX_REQUESTS_PER_MINUTE, true, "auth");
+        } else if (uri.startsWith("/api/auth/reset-password") && "POST".equals(method)) {
+            return new RateLimitConfig("auth_reset_password", AUTH_MAX_REQUESTS_PER_MINUTE, true, "auth");
         } else if (uri.startsWith("/api/messages") && "POST".equals(method)) {
             return new RateLimitConfig("message_send", MESSAGE_MAX_REQUESTS_PER_MINUTE, false, "message");
         } else if (uri.startsWith("/api/media/presigned-url") && "POST".equals(method)) {
