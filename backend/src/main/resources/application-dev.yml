@@ -11,7 +11,12 @@ spring:
       timeout: 5000
       connect-timeout: 5000
     mongodb:
-      uri: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/${MONGO_DB_NAME}?authSource=admin
+      host: localhost
+      port: 27017
+      database: ${MONGO_DB_NAME}
+      username: ${MONGO_INITDB_ROOT_USERNAME}
+      password: ${MONGO_INITDB_ROOT_PASSWORD}
+      authentication-database: admin
 
   mail:
     host: smtp.gmail.com
