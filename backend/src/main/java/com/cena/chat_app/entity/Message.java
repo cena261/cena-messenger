@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.TextIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
@@ -24,6 +25,8 @@ public class Message {
     private String conversationId;
     private String senderId;
     private String type;
+
+    @TextIndexed
     private String content;
     private String mediaUrl;
     private Map<String, Object> mediaMetadata;
