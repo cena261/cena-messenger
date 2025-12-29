@@ -41,7 +41,9 @@ public enum ErrorCode {
     INVALID_REFRESH_TOKEN("INVALID_REFRESH_TOKEN", "Invalid refresh token", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("REFRESH_TOKEN_REVOKED", "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_EXPIRED("REFRESH_TOKEN_EXPIRED", "Refresh token has expired", HttpStatus.UNAUTHORIZED),
-    INVALID_RESET_CODE("INVALID_RESET_CODE", "Invalid or expired reset code", HttpStatus.BAD_REQUEST);
+    INVALID_RESET_CODE("INVALID_RESET_CODE", "Invalid or expired reset code", HttpStatus.BAD_REQUEST),
+    MEDIA_FEATURE_DISABLED("MEDIA_FEATURE_DISABLED", "Media upload feature is currently unavailable", HttpStatus.SERVICE_UNAVAILABLE),
+    EMAIL_FEATURE_DISABLED("EMAIL_FEATURE_DISABLED", "Email feature is currently unavailable", HttpStatus.SERVICE_UNAVAILABLE);
 
     private final String code;
     private final String message;

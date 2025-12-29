@@ -29,9 +29,14 @@ public class PasswordResetService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final com.cena.chat_app.config.FeatureFlags featureFlags;
 
     @Transactional
     public ApiResponse<Void> requestPasswordReset(String email) {
+        if (!featureFlags.isEmailEnabled()) {
+            throw new AppException(ErrorCode.EMAIL_FEATURE_DISABLED);
+        }
+
         String normalizedEmail = email.toLowerCase().trim();
 
         long startTime = System.currentTimeMillis();

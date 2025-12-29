@@ -54,6 +54,7 @@ public class MediaService {
     private final RedisUnreadService redisUnreadService;
     private final BlockingService blockingService;
     private final Counter mediaMessagesCreated;
+    private final com.cena.chat_app.config.FeatureFlags featureFlags;
 
     public MediaService(MinioService minioService,
                         ConversationRepository conversationRepository,
@@ -63,7 +64,8 @@ public class MediaService {
                         RedisMessagePublisher redisMessagePublisher,
                         RedisUnreadService redisUnreadService,
                         BlockingService blockingService,
-                        MeterRegistry meterRegistry) {
+                        MeterRegistry meterRegistry,
+                        com.cena.chat_app.config.FeatureFlags featureFlags) {
         this.minioService = minioService;
         this.conversationRepository = conversationRepository;
         this.conversationMemberRepository = conversationMemberRepository;
@@ -73,9 +75,14 @@ public class MediaService {
         this.redisUnreadService = redisUnreadService;
         this.blockingService = blockingService;
         this.mediaMessagesCreated = meterRegistry.counter("chat.realtime.media.messages.created");
+        this.featureFlags = featureFlags;
     }
 
     public ApiResponse<PresignedUrlResponse> requestPresignedUrl(RequestPresignedUrlRequest request) {
+        if (!featureFlags.isMediaEnabled()) {
+            throw new AppException(ErrorCode.MEDIA_FEATURE_DISABLED);
+        }
+
         String currentUserId = getCurrentUserId();
         if (currentUserId == null) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
@@ -114,6 +121,10 @@ public class MediaService {
     }
 
     public ApiResponse<MessageResponse> createMediaMessage(CreateMediaMessageRequest request) {
+        if (!featureFlags.isMediaEnabled()) {
+            throw new AppException(ErrorCode.MEDIA_FEATURE_DISABLED);
+        }
+
         String currentUserId = getCurrentUserId();
         if (currentUserId == null) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
