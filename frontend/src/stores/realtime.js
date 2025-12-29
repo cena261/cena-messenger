@@ -46,10 +46,14 @@ export const useRealtimeStore = defineStore('realtime', () => {
       handleSeenEvent(data)
     })
 
-    // Subscribe to typing indicators
     websocketService.subscribe(`/user/queue/typing`, (data) => {
       console.log('Typing event received:', data)
       handleTypingEvent(data)
+    })
+
+    websocketService.subscribe(`/user/queue/message-updates`, (data) => {
+      console.log('Message update event received:', data)
+      messagesStore.handleMessageUpdate(data)
     })
   }
 

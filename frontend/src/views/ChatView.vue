@@ -1,14 +1,11 @@
 <template>
-  <div v-if="!conversationId" class="no-conversation">
+  <div v-if="!conversationsStore.activeConversationId" class="no-conversation">
     <p>Select a conversation to start chatting</p>
   </div>
 
   <div v-else class="chat-view">
     <div class="chat-header">
       <h3>{{ conversationName }}</h3>
-      <div v-if="typingUsersDisplay" class="typing-indicator">
-        {{ typingUsersDisplay }}
-      </div>
     </div>
 
     <div class="messages-container" ref="messagesContainer">
@@ -27,12 +24,34 @@
           class="message"
           :class="{ 'own-message': message.senderId === authStore.user?.id }"
         >
+          <div v-if="message.replyTo" class="message-reply-context">
+            Replying to {{ getReplyToUsername(message.replyTo) }}: {{ getReplyToPreview(message.replyTo) }}
+          </div>
+
           <div class="message-sender">{{ message.senderDisplayName || message.senderUsername }}</div>
-          <div class="message-content">{{ message.content }}</div>
+
+          <div v-if="editingMessageId === message.id" class="message-edit">
+            <input v-model="editContent" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" />
+            <div class="edit-actions">
+              <button @click="saveEdit" class="save-btn">Save</button>
+              <button @click="cancelEdit" class="cancel-btn">Cancel</button>
+            </div>
+          </div>
+
+          <div v-else class="message-content">
+            <span v-if="message.isDeleted" class="deleted-message">This message was deleted</span>
+            <span v-else>{{ message.content }}</span>
+            <span v-if="!message.isDeleted && isEdited(message)" class="edited-indicator">(edited)</span>
+          </div>
+
           <div class="message-footer">
             <div class="message-time">{{ formatTime(message.createdAt) }}</div>
-            <div v-if="message.senderId === authStore.user?.id && getSeenByUsers(message.id).length > 0" class="seen-by">
-              ✓ Seen by {{ getSeenByUsers(message.id).join(', ') }}
+            <div v-if="message.senderId === authStore.user?.id && !message.isDeleted" class="message-actions">
+              <button @click="startEdit(message)" class="action-btn">Edit</button>
+              <button @click="handleDeleteMessage(message.id)" class="action-btn">Delete</button>
+            </div>
+            <div v-if="!message.isDeleted" class="message-actions">
+              <button @click="startReply(message)" class="action-btn">Reply</button>
             </div>
           </div>
         </div>
@@ -40,13 +59,16 @@
     </div>
 
     <div class="message-input-container">
-      <form @submit.prevent="sendMessage">
+      <div v-if="replyingTo" class="replying-to">
+        <span>Replying to {{ replyingTo.senderDisplayName || replyingTo.senderUsername }}: {{ replyingTo.content?.substring(0, 50) }}...</span>
+        <button @click="cancelReply" class="cancel-reply-btn">✕</button>
+      </div>
+      <form @submit.prevent="sendMessageHandler">
         <input
           v-model="newMessage"
           type="text"
           placeholder="Type a message..."
-          @input="handleTyping"
-          @blur="handleStopTyping"
+          ref="messageInput"
         />
         <button type="submit" :disabled="!newMessage.trim()">Send</button>
       </form>
@@ -56,13 +78,11 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
 import { useMessagesStore } from '../stores/messages'
 import { useRealtimeStore } from '../stores/realtime'
 
-const route = useRoute()
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
 const messagesStore = useMessagesStore()
@@ -70,158 +90,157 @@ const realtimeStore = useRealtimeStore()
 
 const newMessage = ref('')
 const messagesContainer = ref(null)
-const typingTimeout = ref(null)
-
-const conversationId = computed(() => route.params.id)
+const messageInput = ref(null)
+const editingMessageId = ref(null)
+const editContent = ref('')
+const replyingTo = ref(null)
 
 const conversationName = computed(() => {
-  const conversation = conversationsStore.conversations.find(
-    c => c.id === conversationId.value
-  )
-  return conversation?.name || 'Direct Message'
+  const conversation = conversationsStore.activeConversation
+  if (!conversation) return 'Conversation'
+
+  if (conversation.type === 'GROUP') {
+    return conversation.name || 'Unnamed Group'
+  }
+
+  const otherMember = conversation.members?.find(m => m.userId !== authStore.user?.id)
+  return otherMember?.displayName || otherMember?.username || 'Direct Message'
 })
 
 const messages = computed(() => {
-  return messagesStore.getMessages(conversationId.value)
+  return messagesStore.getMessages(conversationsStore.activeConversationId)
 })
 
-const typingUsers = computed(() => {
-  return realtimeStore.getTypingUsers(conversationId.value)
-})
-
-const typingUsersDisplay = computed(() => {
-  const users = typingUsers.value
-  console.log('typingUsersDisplay computed - users:', users, 'conversationId:', conversationId.value)
-
-  if (users.length === 0) {
-    console.log('No typing users')
-    return ''
-  }
-
-  const conversation = conversationsStore.conversations.find(
-    c => c.id === conversationId.value
-  )
-
-  console.log('Conversation found:', conversation)
-
-  if (!conversation) {
-    console.log('No conversation found, using fallback')
-    return 'Someone is typing...'
-  }
-
-  const names = users.map(userId => {
-    const member = conversation.members?.find(m => m.userId === userId)
-    const name = member?.displayName || member?.username || 'Someone'
-    console.log('User', userId, 'mapped to name:', name)
-    return name
-  })
-
-  if (names.length === 1) {
-    return `${names[0]} is typing...`
-  } else if (names.length === 2) {
-    return `${names[0]} and ${names[1]} are typing...`
-  } else {
-    return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]} are typing...`
-  }
-})
-
-watch(conversationId, async (newId, oldId) => {
+watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
   if (oldId) {
     realtimeStore.unsubscribeFromConversation(oldId)
   }
 
   if (newId) {
+    cancelEdit()
+    cancelReply()
     await loadMessages()
     realtimeStore.subscribeToConversation(newId)
-    await conversationsStore.markAsRead(newId)
     await nextTick()
     scrollToBottom()
   }
-})
+}, { immediate: true })
 
-watch(messages, async (newMessages, oldMessages = []) => {
-  console.log('Messages changed - old:', oldMessages.length, 'new:', newMessages.length)
-  if (newMessages.length > oldMessages.length) {
-    console.log('New message detected, scrolling and marking as read')
-    await nextTick()
-    setTimeout(() => {
-      scrollToBottom()
-    }, 100)
-
-    if (conversationId.value) {
-      console.log('Marking conversation as read:', conversationId.value)
-      await conversationsStore.markAsRead(conversationId.value)
-    }
-  }
+watch(messages, async () => {
+  await nextTick()
+  scrollToBottom()
 }, { deep: true })
 
 onMounted(async () => {
-  if (conversationId.value) {
+  if (conversationsStore.activeConversationId) {
     await loadMessages()
-    realtimeStore.subscribeToConversation(conversationId.value)
-    await conversationsStore.markAsRead(conversationId.value)
+    realtimeStore.subscribeToConversation(conversationsStore.activeConversationId)
     await nextTick()
     scrollToBottom()
   }
 })
 
 onUnmounted(() => {
-  if (conversationId.value) {
-    realtimeStore.unsubscribeFromConversation(conversationId.value)
+  if (conversationsStore.activeConversationId) {
+    realtimeStore.unsubscribeFromConversation(conversationsStore.activeConversationId)
   }
 })
 
 async function loadMessages() {
   try {
-    await messagesStore.fetchMessages(conversationId.value)
+    await messagesStore.fetchMessages(conversationsStore.activeConversationId)
   } catch (error) {
     console.error('Failed to load messages:', error)
   }
 }
 
-async function sendMessage() {
+async function sendMessageHandler() {
   const content = newMessage.value.trim()
   if (!content) return
 
   try {
-    await messagesStore.sendMessage(conversationId.value, content)
+    await messagesStore.sendMessage(
+      conversationsStore.activeConversationId,
+      content,
+      replyingTo.value?.id || null
+    )
     newMessage.value = ''
-    handleStopTyping()
+    cancelReply()
+    await nextTick()
+    scrollToBottom()
   } catch (error) {
     console.error('Failed to send message:', error)
   }
 }
 
-function handleTyping() {
-  console.log('Sending typing start for conversation:', conversationId.value)
-  realtimeStore.sendTypingStart(conversationId.value)
-
-  if (typingTimeout.value) {
-    clearTimeout(typingTimeout.value)
-  }
-
-  typingTimeout.value = setTimeout(() => {
-    handleStopTyping()
-  }, 3000)
+function startEdit(message) {
+  if (message.type !== 'TEXT' || message.isDeleted) return
+  editingMessageId.value = message.id
+  editContent.value = message.content
 }
 
-function handleStopTyping() {
-  console.log('Sending typing stop for conversation:', conversationId.value)
-  if (typingTimeout.value) {
-    clearTimeout(typingTimeout.value)
-    typingTimeout.value = null
+async function saveEdit() {
+  if (!editContent.value.trim()) {
+    cancelEdit()
+    return
   }
-  realtimeStore.sendTypingStop(conversationId.value)
+
+  try {
+    await messagesStore.editMessage(
+      editingMessageId.value,
+      conversationsStore.activeConversationId,
+      editContent.value
+    )
+    cancelEdit()
+  } catch (error) {
+    console.error('Failed to edit message:', error)
+  }
+}
+
+function cancelEdit() {
+  editingMessageId.value = null
+  editContent.value = ''
+}
+
+async function handleDeleteMessage(messageId) {
+  try {
+    await messagesStore.deleteMessage(
+      messageId,
+      conversationsStore.activeConversationId
+    )
+  } catch (error) {
+    console.error('Failed to delete message:', error)
+  }
+}
+
+function startReply(message) {
+  replyingTo.value = message
+  messageInput.value?.focus()
+}
+
+function cancelReply() {
+  replyingTo.value = null
+}
+
+function getReplyToUsername(replyToId) {
+  const msg = messages.value.find(m => m.id === replyToId)
+  return msg?.senderDisplayName || msg?.senderUsername || 'Unknown'
+}
+
+function getReplyToPreview(replyToId) {
+  const msg = messages.value.find(m => m.id === replyToId)
+  if (!msg) return ''
+  if (msg.isDeleted) return 'Deleted message'
+  return msg.content?.substring(0, 30) || ''
+}
+
+function isEdited(message) {
+  return message.updatedAt && message.createdAt !== message.updatedAt
 }
 
 function scrollToBottom() {
   if (messagesContainer.value) {
-    const scrollHeight = messagesContainer.value.scrollHeight
-    const clientHeight = messagesContainer.value.clientHeight
-    console.log('Scrolling to bottom - scrollHeight:', scrollHeight, 'clientHeight:', clientHeight)
-    messagesContainer.value.scrollTop = scrollHeight
-  } else {
-    console.log('messagesContainer not available for scrolling')
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
   }
 }
 
@@ -229,28 +248,6 @@ function formatTime(timestamp) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-}
-
-function getSeenByUsers(messageId) {
-  const receipts = realtimeStore.getSeenReceipts(conversationId.value)
-  const conversation = conversationsStore.conversations.find(
-    c => c.id === conversationId.value
-  )
-  if (!conversation) return []
-
-  const seenByUserIds = Object.entries(receipts)
-    .filter(([userId, lastReadMessageId]) => {
-      if (userId === authStore.user?.id) return false
-      const messageIndex = messages.value.findIndex(m => m.id === messageId)
-      const lastReadIndex = messages.value.findIndex(m => m.id === lastReadMessageId)
-      return lastReadIndex >= messageIndex
-    })
-    .map(([userId]) => userId)
-
-  return seenByUserIds.map(userId => {
-    const member = conversation.members?.find(m => m.userId === userId)
-    return member?.displayName || member?.username || 'Unknown'
-  })
 }
 </script>
 
@@ -280,13 +277,6 @@ function getSeenByUsers(messageId) {
   margin: 0;
   font-size: 1.25rem;
   color: #333;
-}
-
-.typing-indicator {
-  margin-top: 0.5rem;
-  font-size: 0.875rem;
-  color: #4CAF50;
-  font-style: italic;
 }
 
 .messages-container {
@@ -324,6 +314,16 @@ function getSeenByUsers(messageId) {
   background-color: #e3f2fd;
 }
 
+.message-reply-context {
+  font-size: 0.75rem;
+  color: #666;
+  font-style: italic;
+  margin-bottom: 0.25rem;
+  padding: 0.25rem;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
 .message-sender {
   font-size: 0.75rem;
   font-weight: 600;
@@ -337,33 +337,124 @@ function getSeenByUsers(messageId) {
   word-wrap: break-word;
 }
 
+.deleted-message {
+  font-style: italic;
+  color: #999;
+}
+
+.edited-indicator {
+  font-size: 0.75rem;
+  color: #999;
+  font-style: italic;
+  margin-left: 0.5rem;
+}
+
+.message-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.message-edit input {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.save-btn,
+.cancel-btn {
+  padding: 0.25rem 0.75rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.save-btn {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.save-btn:hover {
+  background-color: #45a049;
+}
+
+.cancel-btn {
+  background-color: #f44336;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background-color: #d32f2f;
+}
+
 .message-footer {
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: 0.25rem;
   margin-top: 0.25rem;
 }
 
 .message-time {
   font-size: 0.75rem;
   color: #999;
-  text-align: right;
 }
 
-.seen-by {
-  font-size: 0.65rem;
-  color: #4CAF50;
-  text-align: right;
-  font-style: italic;
+.message-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  font-size: 0.75rem;
+  color: #2196F3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.action-btn:hover {
+  text-decoration: underline;
 }
 
 .message-input-container {
-  padding: 1rem;
   border-top: 1px solid #ddd;
   background-color: white;
 }
 
+.replying-to {
+  padding: 0.5rem 1rem;
+  background-color: #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.cancel-reply-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.25rem;
+  color: #666;
+  padding: 0;
+  margin-left: 0.5rem;
+}
+
+.cancel-reply-btn:hover {
+  color: #333;
+}
+
 .message-input-container form {
+  padding: 1rem;
   display: flex;
   gap: 0.5rem;
 }
@@ -381,7 +472,7 @@ function getSeenByUsers(messageId) {
   border-color: #4CAF50;
 }
 
-.message-input-container button {
+.message-input-container button[type="submit"] {
   padding: 0.75rem 1.5rem;
   background-color: #4CAF50;
   color: white;
@@ -392,11 +483,11 @@ function getSeenByUsers(messageId) {
   font-weight: 500;
 }
 
-.message-input-container button:hover:not(:disabled) {
+.message-input-container button[type="submit"]:hover:not(:disabled) {
   background-color: #45a049;
 }
 
-.message-input-container button:disabled {
+.message-input-container button[type="submit"]:disabled {
   background-color: #ccc;
   cursor: not-allowed;
 }

@@ -13,23 +13,17 @@ export const useMessagesStore = defineStore('messages', () => {
     error.value = null
 
     try {
-      console.log('Fetching messages for conversation:', conversationId)
       const response = await messagesApi.getMessages(conversationId, page, size)
       const messages = response.data
-      console.log('Fetched messages:', messages)
 
-      // Store messages for this conversation
       if (!messagesByConversation.value[conversationId]) {
         messagesByConversation.value[conversationId] = []
       }
 
-      // Messages come in reverse chronological order, reverse them for display
       messagesByConversation.value[conversationId] = messages.reverse()
-      console.log('Messages stored for conversation:', conversationId, messagesByConversation.value[conversationId])
 
       return messages
     } catch (err) {
-      console.error('Error fetching messages:', err)
       error.value = err.response?.data?.message || 'Failed to fetch messages'
       throw err
     } finally {
@@ -37,14 +31,51 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
-  async function sendMessage(conversationId, content) {
+  async function sendMessage(conversationId, content, replyTo = null) {
     try {
-      const response = await messagesApi.sendMessage(conversationId, content)
+      const response = await messagesApi.sendMessage(conversationId, content, replyTo)
       const newMessage = response.data
+
+      addMessage(conversationId, newMessage)
 
       return newMessage
     } catch (err) {
       console.error('Failed to send message:', err)
+      throw err
+    }
+  }
+
+  async function editMessage(messageId, conversationId, content) {
+    try {
+      const response = await messagesApi.editMessage(messageId, content)
+      const updateData = response.data
+
+      updateMessageInStore(conversationId, updateData.messageId, {
+        content: updateData.content,
+        updatedAt: updateData.updatedAt
+      })
+
+      return updateData
+    } catch (err) {
+      console.error('Failed to edit message:', err)
+      throw err
+    }
+  }
+
+  async function deleteMessage(messageId, conversationId) {
+    try {
+      const response = await messagesApi.deleteMessage(messageId)
+      const updateData = response.data
+
+      updateMessageInStore(conversationId, updateData.messageId, {
+        content: null,
+        isDeleted: true,
+        updatedAt: updateData.updatedAt
+      })
+
+      return updateData
+    } catch (err) {
+      console.error('Failed to delete message:', err)
       throw err
     }
   }
@@ -59,14 +90,40 @@ export const useMessagesStore = defineStore('messages', () => {
     )
 
     if (!exists) {
-      console.log('Adding new message to conversation', conversationId, 'messageId:', message.id)
       messagesByConversation.value[conversationId] = [
         ...messagesByConversation.value[conversationId],
         message
       ]
-      console.log('Updated message count:', messagesByConversation.value[conversationId].length)
-    } else {
-      console.log('Message already exists, skipping:', message.id)
+    }
+  }
+
+  function updateMessageInStore(conversationId, messageId, updates) {
+    const messages = messagesByConversation.value[conversationId]
+    if (!messages) return
+
+    const messageIndex = messages.findIndex(m => m.id === messageId)
+    if (messageIndex !== -1) {
+      messages[messageIndex] = {
+        ...messages[messageIndex],
+        ...updates
+      }
+    }
+  }
+
+  function handleMessageUpdate(updateData) {
+    const { conversationId, messageId, action, content, updatedAt, isDeleted } = updateData
+
+    if (action === 'EDITED') {
+      updateMessageInStore(conversationId, messageId, {
+        content,
+        updatedAt
+      })
+    } else if (action === 'DELETED') {
+      updateMessageInStore(conversationId, messageId, {
+        content: null,
+        isDeleted: true,
+        updatedAt
+      })
     }
   }
 
@@ -88,8 +145,11 @@ export const useMessagesStore = defineStore('messages', () => {
     error,
     fetchMessages,
     sendMessage,
+    editMessage,
+    deleteMessage,
     addMessage,
     getMessages,
-    clearMessages
+    clearMessages,
+    handleMessageUpdate
   }
 })

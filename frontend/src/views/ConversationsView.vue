@@ -56,23 +56,7 @@
     </div>
 
     <div class="conversation-detail">
-      <div v-if="!conversationsStore.activeConversationId" class="empty-state">
-        <p>Select a conversation to view</p>
-      </div>
-
-      <div v-else class="selected-conversation">
-        <h3>Conversation Selected</h3>
-        <p><strong>ID:</strong> {{ conversationsStore.activeConversationId }}</p>
-        <p v-if="conversationsStore.activeConversation">
-          <strong>Name:</strong> {{ getConversationDisplayName(conversationsStore.activeConversation) }}
-        </p>
-        <p v-if="conversationsStore.activeConversation">
-          <strong>Type:</strong> {{ conversationsStore.activeConversation.type }}
-        </p>
-        <p v-if="conversationsStore.activeConversation">
-          <strong>Members:</strong> {{ conversationsStore.activeConversation.members?.length || 0 }}
-        </p>
-      </div>
+      <ChatView />
     </div>
   </div>
 </template>
@@ -83,6 +67,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
 import websocketService from '../services/websocket'
+import ChatView from './ChatView.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -315,42 +300,8 @@ onUnmounted(() => {
 
 .conversation-detail {
   flex: 1;
-  background-color: #fafafa;
   display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.empty-state {
-  text-align: center;
-  color: #999;
-}
-
-.empty-state p {
-  font-size: 1.125rem;
-}
-
-.selected-conversation {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  max-width: 500px;
-  width: 100%;
-}
-
-.selected-conversation h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  color: #333;
-}
-
-.selected-conversation p {
-  margin: 0.75rem 0;
-  color: #666;
-}
-
-.selected-conversation strong {
-  color: #333;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>
