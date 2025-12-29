@@ -8,6 +8,8 @@ spring:
       host: localhost
       port: 6379
       password: ${REDIS_PASSWORD}
+      timeout: 5000
+      connect-timeout: 5000
   mongodb:
     uri: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/${MONGO_DB_NAME}?authSource=admin
 
@@ -23,6 +25,9 @@ spring:
           auth: true
           starttls:
             enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 jwt:
   #not really secret i mean
@@ -36,6 +41,9 @@ minio:
   secret-key: ${MINIO_ROOT_PASSWORD}
   bucket-name: chat-media
   presigned-url-expiry: 300
+  connect-timeout: 5000
+  write-timeout: 10000
+  read-timeout: 10000
 
 management:
   endpoints:

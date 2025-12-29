@@ -19,12 +19,14 @@ public class RedisGroupEventPublisher {
     private final ObjectMapper objectMapper;
     private final Counter groupEventsPublished;
     private final Counter publishFailures;
+    private final Counter publishTimeouts;
 
     public RedisGroupEventPublisher(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.groupEventsPublished = meterRegistry.counter("chat.realtime.group.events.published");
         this.publishFailures = meterRegistry.counter("chat.realtime.redis.publish.failures", "type", "group-event");
+        this.publishTimeouts = meterRegistry.counter("chat.realtime.redis.publish.timeouts", "type", "group-event");
     }
 
     public void publishGroupEvent(String conversationId, GroupEventResponse event) {
@@ -33,11 +35,22 @@ public class RedisGroupEventPublisher {
             String payload = objectMapper.writeValueAsString(event);
             redisTemplate.convertAndSend(channel, payload);
             groupEventsPublished.increment();
-        } catch (JacksonException e) {
-            publishFailures.increment();
-            log.error("Failed to publish group event to Redis - conversationId={}, channel={}, error={}",
-                    conversationId, channel, e.getMessage(), e);
-            throw new RuntimeException("Failed to serialize group event", e);
+        } catch (Exception e) {
+            if (isTimeoutException(e)) {
+                publishTimeouts.increment();
+                log.error("Redis timeout publishing group event - conversationId={}, channel={}", conversationId, channel);
+            } else {
+                publishFailures.increment();
+                log.error("Failed to publish group event to Redis - conversationId={}, channel={}, error={}",
+                        conversationId, channel, e.getMessage());
+            }
         }
+    }
+
+    private boolean isTimeoutException(Exception e) {
+        String message = e.getMessage();
+        Throwable cause = e.getCause();
+        return (message != null && (message.contains("timeout") || message.contains("timed out") || message.contains("TimeoutException"))) ||
+               (cause != null && cause.getClass().getName().contains("TimeoutException"));
     }
 }

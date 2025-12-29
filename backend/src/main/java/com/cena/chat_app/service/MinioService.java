@@ -1,6 +1,8 @@
 package com.cena.chat_app.service;
 
 import com.cena.chat_app.config.MinioProperties;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
@@ -18,10 +20,16 @@ import java.util.concurrent.TimeUnit;
 public class MinioService {
     private final MinioClient minioClient;
     private final MinioProperties minioProperties;
+    private final Counter minioSuccessCounter;
+    private final Counter minioFailureCounter;
+    private final Counter minioTimeoutCounter;
 
-    public MinioService(MinioClient minioClient, MinioProperties minioProperties) {
+    public MinioService(MinioClient minioClient, MinioProperties minioProperties, MeterRegistry meterRegistry) {
         this.minioClient = minioClient;
         this.minioProperties = minioProperties;
+        this.minioSuccessCounter = meterRegistry.counter("minio.operation.success");
+        this.minioFailureCounter = meterRegistry.counter("minio.operation.failure");
+        this.minioTimeoutCounter = meterRegistry.counter("minio.operation.timeout");
     }
 
     @PostConstruct
@@ -48,7 +56,7 @@ public class MinioService {
     public String generatePresignedUploadUrl(String fileName, String contentType) {
         try {
             String objectName = generateObjectName(fileName);
-            return minioClient.getPresignedObjectUrl(
+            String url = minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.PUT)
                             .bucket(minioProperties.getBucketName())
@@ -56,10 +64,26 @@ public class MinioService {
                             .expiry(minioProperties.getPresignedUrlExpiry(), TimeUnit.SECONDS)
                             .build()
             );
+            minioSuccessCounter.increment();
+            return url;
         } catch (Exception e) {
-            log.error("Failed to generate presigned upload URL - fileName={}, error={}", fileName, e.getMessage(), e);
+            if (isTimeoutException(e)) {
+                minioTimeoutCounter.increment();
+                log.error("MinIO timeout generating presigned URL - fileName={}", fileName);
+            } else {
+                minioFailureCounter.increment();
+                log.error("MinIO failure generating presigned URL - fileName={}, error={}", fileName, e.getMessage());
+            }
             throw new RuntimeException("Failed to generate presigned upload URL", e);
         }
+    }
+
+    private boolean isTimeoutException(Exception e) {
+        String message = e.getMessage();
+        Throwable cause = e.getCause();
+        return (message != null && (message.contains("timeout") || message.contains("timed out"))) ||
+               (cause != null && cause.getMessage() != null &&
+                (cause.getMessage().contains("timeout") || cause.getMessage().contains("timed out")));
     }
 
     public String getObjectUrl(String objectKey) {

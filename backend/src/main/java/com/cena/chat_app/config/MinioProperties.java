@@ -13,4 +13,7 @@ public class MinioProperties {
     private String secretKey;
     private String bucketName;
     private int presignedUrlExpiry;
+    private long connectTimeout = 5000;
+    private long writeTimeout = 10000;
+    private long readTimeout = 10000;
 }

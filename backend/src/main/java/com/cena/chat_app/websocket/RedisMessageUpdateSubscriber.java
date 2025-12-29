@@ -6,6 +6,8 @@ import com.cena.chat_app.entity.ConversationMember;
 import com.cena.chat_app.repository.ConversationMemberRepository;
 import com.cena.chat_app.repository.ConversationRepository;
 import com.cena.chat_app.service.BlockingService;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.connection.Message;
@@ -26,17 +28,24 @@ public class RedisMessageUpdateSubscriber implements MessageListener {
     private final ConversationMemberRepository conversationMemberRepository;
     private final ConversationRepository conversationRepository;
     private final BlockingService blockingService;
+    private final Counter messageUpdatesReceived;
+    private final Counter subscribeFailures;
+    private final Counter subscribeTimeouts;
 
     public RedisMessageUpdateSubscriber(SimpMessagingTemplate messagingTemplate,
                                         ObjectMapper objectMapper,
                                         ConversationMemberRepository conversationMemberRepository,
                                         ConversationRepository conversationRepository,
-                                        BlockingService blockingService) {
+                                        BlockingService blockingService,
+                                        MeterRegistry meterRegistry) {
         this.messagingTemplate = messagingTemplate;
         this.objectMapper = objectMapper;
         this.conversationMemberRepository = conversationMemberRepository;
         this.conversationRepository = conversationRepository;
         this.blockingService = blockingService;
+        this.messageUpdatesReceived = meterRegistry.counter("chat.realtime.redis.subscribe.success", "type", "message-update");
+        this.subscribeFailures = meterRegistry.counter("chat.realtime.redis.subscribe.failures", "type", "message-update");
+        this.subscribeTimeouts = meterRegistry.counter("chat.realtime.redis.subscribe.timeouts", "type", "message-update");
     }
 
     @Override
@@ -60,9 +69,15 @@ public class RedisMessageUpdateSubscriber implements MessageListener {
                     messagingTemplate.convertAndSendToUser(member.getUserId(), "/queue/message-updates", updateEvent);
                 }
             }
+            messageUpdatesReceived.increment();
         } catch (Exception e) {
-            log.error("Failed to process Redis message update event - channel={}, error={}", channel, e.getMessage(), e);
-            throw new RuntimeException("Failed to process Redis message update event", e);
+            if (isTimeoutException(e)) {
+                subscribeTimeouts.increment();
+                log.error("Redis timeout processing message update event - channel={}", channel);
+            } else {
+                subscribeFailures.increment();
+                log.error("Failed to process Redis message update event - channel={}, error={}", channel, e.getMessage());
+            }
         }
     }
 
@@ -81,5 +96,12 @@ public class RedisMessageUpdateSubscriber implements MessageListener {
 
     private String extractSenderIdFromEvent(MessageUpdateEventResponse event) {
         return event.getSenderId();
+    }
+
+    private boolean isTimeoutException(Exception e) {
+        String message = e.getMessage();
+        Throwable cause = e.getCause();
+        return (message != null && (message.contains("timeout") || message.contains("timed out") || message.contains("TimeoutException"))) ||
+               (cause != null && cause.getClass().getName().contains("TimeoutException"));
     }
 }

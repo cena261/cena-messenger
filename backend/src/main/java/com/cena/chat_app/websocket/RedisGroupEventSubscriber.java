@@ -3,6 +3,8 @@ package com.cena.chat_app.websocket;
 import com.cena.chat_app.dto.response.GroupEventResponse;
 import com.cena.chat_app.entity.ConversationMember;
 import com.cena.chat_app.repository.ConversationMemberRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.connection.Message;
@@ -21,13 +23,20 @@ public class RedisGroupEventSubscriber implements MessageListener {
     private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper;
     private final ConversationMemberRepository conversationMemberRepository;
+    private final Counter groupEventsReceived;
+    private final Counter subscribeFailures;
+    private final Counter subscribeTimeouts;
 
     public RedisGroupEventSubscriber(SimpMessagingTemplate messagingTemplate,
                                      ObjectMapper objectMapper,
-                                     ConversationMemberRepository conversationMemberRepository) {
+                                     ConversationMemberRepository conversationMemberRepository,
+                                     MeterRegistry meterRegistry) {
         this.messagingTemplate = messagingTemplate;
         this.objectMapper = objectMapper;
         this.conversationMemberRepository = conversationMemberRepository;
+        this.groupEventsReceived = meterRegistry.counter("chat.realtime.redis.subscribe.success", "type", "group-event");
+        this.subscribeFailures = meterRegistry.counter("chat.realtime.redis.subscribe.failures", "type", "group-event");
+        this.subscribeTimeouts = meterRegistry.counter("chat.realtime.redis.subscribe.timeouts", "type", "group-event");
     }
 
     @Override
@@ -48,9 +57,15 @@ public class RedisGroupEventSubscriber implements MessageListener {
             for (ConversationMember member : members) {
                 messagingTemplate.convertAndSendToUser(member.getUserId(), "/queue/group-events", groupEvent);
             }
+            groupEventsReceived.increment();
         } catch (Exception e) {
-            log.error("Failed to process Redis group event - channel={}, error={}", channel, e.getMessage(), e);
-            throw new RuntimeException("Failed to process Redis group event", e);
+            if (isTimeoutException(e)) {
+                subscribeTimeouts.increment();
+                log.error("Redis timeout processing group event - channel={}", channel);
+            } else {
+                subscribeFailures.increment();
+                log.error("Failed to process Redis group event - channel={}, error={}", channel, e.getMessage());
+            }
         }
     }
 
@@ -65,5 +80,12 @@ public class RedisGroupEventSubscriber implements MessageListener {
         int start = "conversation:".length();
         int end = channel.length() - ":group-events".length();
         return channel.substring(start, end);
+    }
+
+    private boolean isTimeoutException(Exception e) {
+        String message = e.getMessage();
+        Throwable cause = e.getCause();
+        return (message != null && (message.contains("timeout") || message.contains("timed out") || message.contains("TimeoutException"))) ||
+               (cause != null && cause.getClass().getName().contains("TimeoutException"));
     }
 }

@@ -14,9 +14,15 @@ public class MinioConfig {
 
     @Bean
     public MinioClient minioClient() {
-        return MinioClient.builder()
+        MinioClient client = MinioClient.builder()
                 .endpoint(minioProperties.getEndpoint())
                 .credentials(minioProperties.getAccessKey(), minioProperties.getSecretKey())
                 .build();
+        client.setTimeout(
+            minioProperties.getConnectTimeout(),
+            minioProperties.getWriteTimeout(),
+            minioProperties.getReadTimeout()
+        );
+        return client;
     }
 }

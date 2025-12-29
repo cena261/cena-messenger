@@ -19,12 +19,14 @@ public class RedisReactionPublisher {
     private final ObjectMapper objectMapper;
     private final Counter reactionEventsPublished;
     private final Counter publishFailures;
+    private final Counter publishTimeouts;
 
     public RedisReactionPublisher(StringRedisTemplate redisTemplate, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.reactionEventsPublished = meterRegistry.counter("chat.realtime.reaction.events.published");
         this.publishFailures = meterRegistry.counter("chat.realtime.redis.publish.failures", "type", "reaction");
+        this.publishTimeouts = meterRegistry.counter("chat.realtime.redis.publish.timeouts", "type", "reaction");
     }
 
     public void publishReactionEvent(String conversationId, ReactionEventResponse event) {
@@ -33,11 +35,22 @@ public class RedisReactionPublisher {
             String payload = objectMapper.writeValueAsString(event);
             redisTemplate.convertAndSend(channel, payload);
             reactionEventsPublished.increment();
-        } catch (JacksonException e) {
-            publishFailures.increment();
-            log.error("Failed to publish reaction event to Redis - conversationId={}, channel={}, error={}",
-                    conversationId, channel, e.getMessage(), e);
-            throw new RuntimeException("Failed to serialize reaction event", e);
+        } catch (Exception e) {
+            if (isTimeoutException(e)) {
+                publishTimeouts.increment();
+                log.error("Redis timeout publishing reaction event - conversationId={}, channel={}", conversationId, channel);
+            } else {
+                publishFailures.increment();
+                log.error("Failed to publish reaction event to Redis - conversationId={}, channel={}, error={}",
+                        conversationId, channel, e.getMessage());
+            }
         }
+    }
+
+    private boolean isTimeoutException(Exception e) {
+        String message = e.getMessage();
+        Throwable cause = e.getCause();
+        return (message != null && (message.contains("timeout") || message.contains("timed out") || message.contains("TimeoutException"))) ||
+               (cause != null && cause.getClass().getName().contains("TimeoutException"));
     }
 }
