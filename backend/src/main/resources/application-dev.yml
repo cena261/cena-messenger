@@ -36,3 +36,30 @@ minio:
   secret-key: ${MINIO_ROOT_PASSWORD}
   bucket-name: chat-media
   presigned-url-expiry: 300
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: mongo,redis
+          show-details: always
+        liveness:
+          show-details: always
+  health:
+    defaults:
+      enabled: false
+    mongo:
+      enabled: false
+    redis:
+      enabled: false
+    mail:
+      enabled: false
