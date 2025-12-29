@@ -42,11 +42,12 @@
         </div>
 
         <div v-if="isRegistering" class="form-group">
-          <label for="displayName">Display Name (optional)</label>
+          <label for="displayName">Display Name</label>
           <input
             id="displayName"
             v-model="displayName"
             type="text"
+            :required="isRegistering"
           />
         </div>
 
@@ -101,7 +102,7 @@ async function handleSubmit() {
         username.value,
         password.value,
         email.value,
-        displayName.value || null,
+        displayName.value,
         phone.value || null
       )
     } else {
