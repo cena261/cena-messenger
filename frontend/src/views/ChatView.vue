@@ -235,7 +235,12 @@ function getReplyToPreview(replyToId) {
 }
 
 function isEdited(message) {
-  return message.updatedAt && message.createdAt !== message.updatedAt
+  if (!message.updatedAt || !message.createdAt) return false
+
+  const created = new Date(message.createdAt).getTime()
+  const updated = new Date(message.updatedAt).getTime()
+
+  return updated - created > 1000
 }
 
 function scrollToBottom() {
