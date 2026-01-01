@@ -29,18 +29,54 @@ export const useConversationsStore = defineStore('conversations', () => {
     }
   }
 
-  async function createConversation(type, memberUserIds, name = null) {
+  async function createDirectConversation(targetUserId) {
     isLoading.value = true
     error.value = null
 
     try {
-      const response = await conversationsApi.createConversation(type, memberUserIds, name)
+      const response = await conversationsApi.createDirectConversation(targetUserId)
+
+      if (!response || !response.data) {
+        console.error('Invalid response from server:', response)
+        throw new Error('Invalid response from server')
+      }
+
+      const newConversation = response.data
+
+      const existing = conversations.value.find(c => c.id === newConversation.id)
+      if (!existing) {
+        conversations.value.unshift(newConversation)
+      }
+
+      return newConversation
+    } catch (err) {
+      console.error('Failed to create direct conversation:', err)
+      error.value = err.response?.data?.message || err.message || 'Failed to create conversation'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function createGroupConversation(name, memberIds, avatarUrl = null) {
+    isLoading.value = true
+    error.value = null
+
+    try {
+      const response = await conversationsApi.createGroupConversation(name, memberIds, avatarUrl)
+
+      if (!response || !response.data) {
+        console.error('Invalid response from server:', response)
+        throw new Error('Invalid response from server')
+      }
+
       const newConversation = response.data
 
       conversations.value.unshift(newConversation)
       return newConversation
     } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to create conversation'
+      console.error('Failed to create group conversation:', err)
+      error.value = err.response?.data?.message || err.message || 'Failed to create group'
       throw err
     } finally {
       isLoading.value = false
@@ -77,6 +113,13 @@ export const useConversationsStore = defineStore('conversations', () => {
     console.log('Seen event received:', seenEvent)
   }
 
+  function updateConversationLastMessage(conversationId, message) {
+    const conversation = conversations.value.find(c => c.id === conversationId)
+    if (conversation) {
+      conversation.lastMessageAt = message.createdAt || new Date().toISOString()
+    }
+  }
+
   return {
     conversations,
     activeConversationId,
@@ -84,9 +127,11 @@ export const useConversationsStore = defineStore('conversations', () => {
     isLoading,
     error,
     fetchConversations,
-    createConversation,
+    createDirectConversation,
+    createGroupConversation,
     selectConversation,
     updateConversationUnreadCount,
-    handleSeenEvent
+    handleSeenEvent,
+    updateConversationLastMessage
   }
 })

@@ -10,14 +10,36 @@ export async function getConversation(conversationId) {
   return response.data
 }
 
-export async function createConversation(type, memberUserIds, name = null) {
-  const endpoint = type === 'DIRECT' ? '/conversations/direct' : '/conversations/group'
-  const payload = type === 'DIRECT'
-    ? { targetUserId: memberUserIds[0] }
-    : { memberUserIds, name }
+export async function createDirectConversation(targetUserId) {
+  const response = await apiClient.post('/conversations/direct', {
+    targetUserId
+  })
+  const apiResponse = response.data
 
-  const response = await apiClient.post(endpoint, payload)
-  return response.data
+  if (apiResponse.status === 'error') {
+    const error = new Error(apiResponse.message || 'Failed to create conversation')
+    error.response = { data: apiResponse }
+    throw error
+  }
+
+  return apiResponse
+}
+
+export async function createGroupConversation(name, memberIds, avatarUrl = null) {
+  const payload = { name, memberIds }
+  if (avatarUrl) {
+    payload.avatarUrl = avatarUrl
+  }
+  const response = await apiClient.post('/conversations/group', payload)
+  const apiResponse = response.data
+
+  if (apiResponse.status === 'error') {
+    const error = new Error(apiResponse.message || 'Failed to create group conversation')
+    error.response = { data: apiResponse }
+    throw error
+  }
+
+  return apiResponse
 }
 
 export async function markConversationAsRead(conversationId) {

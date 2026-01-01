@@ -3,7 +3,10 @@
     <div class="conversations-list">
       <div class="list-header">
         <h2>Conversations</h2>
-        <button @click="handleLogout" class="logout-btn">Logout</button>
+        <div class="header-actions">
+          <button @click="openModal" class="new-chat-btn">New Chat</button>
+          <button @click="handleLogout" class="logout-btn">Logout</button>
+        </div>
       </div>
 
       <div v-if="conversationsStore.isLoading" class="loading">
@@ -58,21 +61,29 @@
     <div class="conversation-detail">
       <ChatView />
     </div>
+
+    <NewConversationModal
+      :isOpen="isModalOpen"
+      @close="closeModal"
+      @conversationCreated="handleConversationCreated"
+    />
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
 import websocketService from '../services/websocket'
 import ChatView from './ChatView.vue'
+import NewConversationModal from '../components/NewConversationModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
 
+const isModalOpen = ref(false)
 let unreadSubscription = null
 let seenSubscription = null
 
@@ -116,6 +127,20 @@ async function handleSelectConversation(conversationId) {
 async function handleLogout() {
   await authStore.logout()
   router.push('/login')
+}
+
+function openModal() {
+  isModalOpen.value = true
+}
+
+function closeModal() {
+  isModalOpen.value = false
+}
+
+async function handleConversationCreated(conversation) {
+  if (conversation && conversation.id) {
+    await conversationsStore.selectConversation(conversation.id)
+  }
 }
 
 onMounted(async () => {
@@ -171,6 +196,25 @@ onUnmounted(() => {
   margin: 0;
   font-size: 1.25rem;
   color: #333;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.new-chat-btn {
+  padding: 0.5rem 1rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.new-chat-btn:hover {
+  background-color: #45a049;
 }
 
 .logout-btn {
