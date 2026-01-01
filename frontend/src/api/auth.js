@@ -35,3 +35,19 @@ export async function getCurrentUser() {
   const response = await apiClient.get('/users/me')
   return response.data
 }
+
+export async function requestPasswordReset(email) {
+  const response = await apiClient.post('/auth/forgot-password', {
+    email
+  })
+  return response.data
+}
+
+export async function resetPassword(email, code, newPassword) {
+  const response = await apiClient.post('/auth/reset-password', {
+    email,
+    code,
+    newPassword
+  })
+  return response.data
+}

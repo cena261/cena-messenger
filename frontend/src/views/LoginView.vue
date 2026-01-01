@@ -7,7 +7,11 @@
         {{ error }}
       </div>
 
-      <form @submit.prevent="handleSubmit">
+      <div v-if="successMessage" class="success-message">
+        {{ successMessage }}
+      </div>
+
+      <form v-if="!isForgotPassword" @submit.prevent="handleSubmit">
         <div class="form-group">
           <label for="username">Username</label>
           <input
@@ -66,9 +70,70 @@
         </button>
       </form>
 
-      <div class="toggle-mode">
+      <form v-if="isForgotPassword && resetStep === 1" @submit.prevent="handleRequestReset">
+        <div class="form-group">
+          <label for="resetEmail">Email</label>
+          <input
+            id="resetEmail"
+            v-model="resetEmail"
+            type="email"
+            required
+            autocomplete="email"
+            placeholder="Enter your email address"
+          />
+        </div>
+
+        <button type="submit" :disabled="isLoading">
+          {{ isLoading ? 'Sending...' : 'Send Reset Code' }}
+        </button>
+      </form>
+
+      <form v-if="isForgotPassword && resetStep === 2" @submit.prevent="handleResetPassword">
+        <div class="form-group">
+          <label for="resetCode">6-Digit Code</label>
+          <input
+            id="resetCode"
+            v-model="resetCode"
+            type="text"
+            required
+            maxlength="6"
+            pattern="[0-9]{6}"
+            placeholder="Enter 6-digit code"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="newPassword">New Password</label>
+          <input
+            id="newPassword"
+            v-model="newPassword"
+            type="password"
+            required
+            minlength="8"
+            placeholder="Minimum 8 characters"
+          />
+        </div>
+
+        <button type="submit" :disabled="isLoading">
+          {{ isLoading ? 'Resetting...' : 'Reset Password' }}
+        </button>
+      </form>
+
+      <div v-if="!isForgotPassword" class="toggle-mode">
+        <button type="button" @click="toggleForgotPassword">
+          Forgot password?
+        </button>
+      </div>
+
+      <div v-if="!isForgotPassword" class="toggle-mode">
         <button type="button" @click="isRegistering = !isRegistering">
           {{ isRegistering ? 'Already have an account? Login' : 'Need an account? Register' }}
+        </button>
+      </div>
+
+      <div v-if="isForgotPassword" class="toggle-mode">
+        <button type="button" @click="backToLogin">
+          Back to Login
         </button>
       </div>
     </div>
@@ -80,6 +145,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRealtimeStore } from '../stores/realtime'
+import * as authApi from '../api/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -94,9 +160,17 @@ const isRegistering = ref(false)
 const isLoading = ref(false)
 const error = ref(null)
 
+const isForgotPassword = ref(false)
+const resetStep = ref(1)
+const resetEmail = ref('')
+const resetCode = ref('')
+const newPassword = ref('')
+const successMessage = ref(null)
+
 async function handleSubmit() {
   isLoading.value = true
   error.value = null
+  successMessage.value = null
 
   try {
     if (isRegistering.value) {
@@ -118,6 +192,61 @@ async function handleSubmit() {
   } finally {
     isLoading.value = false
   }
+}
+
+async function handleRequestReset() {
+  isLoading.value = true
+  error.value = null
+  successMessage.value = null
+
+  try {
+    await authApi.requestPasswordReset(resetEmail.value)
+    successMessage.value = 'Reset code sent to your email'
+    resetStep.value = 2
+  } catch (err) {
+    error.value = err.response?.data?.message || 'Failed to send reset code'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+async function handleResetPassword() {
+  isLoading.value = true
+  error.value = null
+  successMessage.value = null
+
+  try {
+    await authApi.resetPassword(resetEmail.value, resetCode.value, newPassword.value)
+    successMessage.value = 'Password reset successfully! You can now login.'
+
+    setTimeout(() => {
+      backToLogin()
+    }, 2000)
+  } catch (err) {
+    error.value = err.response?.data?.message || 'Failed to reset password'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function toggleForgotPassword() {
+  isForgotPassword.value = true
+  resetStep.value = 1
+  error.value = null
+  successMessage.value = null
+  resetEmail.value = ''
+  resetCode.value = ''
+  newPassword.value = ''
+}
+
+function backToLogin() {
+  isForgotPassword.value = false
+  resetStep.value = 1
+  error.value = null
+  successMessage.value = null
+  resetEmail.value = ''
+  resetCode.value = ''
+  newPassword.value = ''
 }
 </script>
 
@@ -149,6 +278,15 @@ h1 {
 .error-message {
   background-color: #fee;
   color: #c33;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.success-message {
+  background-color: #efe;
+  color: #3c3;
   padding: 0.75rem;
   border-radius: 4px;
   margin-bottom: 1rem;
