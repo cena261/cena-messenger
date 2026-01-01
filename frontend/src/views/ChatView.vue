@@ -6,6 +6,22 @@
   <div v-else class="chat-view">
     <div class="chat-header">
       <h3>{{ conversationName }}</h3>
+      <div v-if="otherUserId" class="header-actions">
+        <button
+          v-if="!blockingStore.isUserBlocked(otherUserId)"
+          @click="handleBlockUser"
+          class="block-btn"
+        >
+          Block User
+        </button>
+        <button
+          v-else
+          @click="handleUnblockUser"
+          class="unblock-btn"
+        >
+          Unblock User
+        </button>
+      </div>
     </div>
 
     <div class="messages-container" ref="messagesContainer">
@@ -82,11 +98,13 @@ import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
 import { useMessagesStore } from '../stores/messages'
 import { useRealtimeStore } from '../stores/realtime'
+import { useBlockingStore } from '../stores/blocking'
 
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
 const messagesStore = useMessagesStore()
 const realtimeStore = useRealtimeStore()
+const blockingStore = useBlockingStore()
 
 const newMessage = ref('')
 const messagesContainer = ref(null)
@@ -109,6 +127,14 @@ const conversationName = computed(() => {
 
 const messages = computed(() => {
   return messagesStore.getMessages(conversationsStore.activeConversationId)
+})
+
+const otherUserId = computed(() => {
+  const conversation = conversationsStore.activeConversation
+  if (!conversation || conversation.type === 'GROUP') return null
+
+  const otherMember = conversation.members?.find(m => m.userId !== authStore.user?.id)
+  return otherMember?.userId || null
 })
 
 watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
@@ -254,6 +280,31 @@ function formatTime(timestamp) {
   const date = new Date(timestamp)
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
+
+async function handleBlockUser() {
+  if (!otherUserId.value) return
+
+  const confirmBlock = confirm('Are you sure you want to block this user? You will not be able to send or receive messages.')
+  if (!confirmBlock) return
+
+  try {
+    await blockingStore.blockUser(otherUserId.value)
+  } catch (error) {
+    console.error('Failed to block user:', error)
+    alert('Failed to block user. Please try again.')
+  }
+}
+
+async function handleUnblockUser() {
+  if (!otherUserId.value) return
+
+  try {
+    await blockingStore.unblockUser(otherUserId.value)
+  } catch (error) {
+    console.error('Failed to unblock user:', error)
+    alert('Failed to unblock user. Please try again.')
+  }
+}
 </script>
 
 <style scoped>
@@ -276,12 +327,48 @@ function formatTime(timestamp) {
   padding: 1rem;
   border-bottom: 1px solid #ddd;
   background-color: #f9f9f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .chat-header h3 {
   margin: 0;
   font-size: 1.25rem;
   color: #333;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.block-btn {
+  padding: 0.5rem 1rem;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.block-btn:hover {
+  background-color: #d32f2f;
+}
+
+.unblock-btn {
+  padding: 0.5rem 1rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.unblock-btn:hover {
+  background-color: #45a049;
 }
 
 .messages-container {

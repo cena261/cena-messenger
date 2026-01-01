@@ -5,6 +5,7 @@
         <h2>Conversations</h2>
         <div class="header-actions">
           <button @click="openModal" class="new-chat-btn">New Chat</button>
+          <button @click="openBlockedUsersModal" class="blocked-users-btn">Blocked</button>
           <button @click="handleLogout" class="logout-btn">Logout</button>
         </div>
       </div>
@@ -67,6 +68,11 @@
       @close="closeModal"
       @conversationCreated="handleConversationCreated"
     />
+
+    <BlockedUsersModal
+      :isOpen="isBlockedUsersModalOpen"
+      @close="closeBlockedUsersModal"
+    />
   </div>
 </template>
 
@@ -75,15 +81,19 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
+import { useBlockingStore } from '../stores/blocking'
 import websocketService from '../services/websocket'
 import ChatView from './ChatView.vue'
 import NewConversationModal from '../components/NewConversationModal.vue'
+import BlockedUsersModal from '../components/BlockedUsersModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
+const blockingStore = useBlockingStore()
 
 const isModalOpen = ref(false)
+const isBlockedUsersModalOpen = ref(false)
 let unreadSubscription = null
 let seenSubscription = null
 
@@ -137,6 +147,14 @@ function closeModal() {
   isModalOpen.value = false
 }
 
+function openBlockedUsersModal() {
+  isBlockedUsersModalOpen.value = true
+}
+
+function closeBlockedUsersModal() {
+  isBlockedUsersModalOpen.value = false
+}
+
 async function handleConversationCreated(conversation) {
   if (conversation && conversation.id) {
     await conversationsStore.selectConversation(conversation.id)
@@ -145,6 +163,7 @@ async function handleConversationCreated(conversation) {
 
 onMounted(async () => {
   await conversationsStore.fetchConversations()
+  await blockingStore.fetchBlockedUsers()
 
   unreadSubscription = websocketService.subscribeToUnreadUpdates((unreadUpdate) => {
     console.log('Unread update received:', unreadUpdate)
@@ -215,6 +234,20 @@ onUnmounted(() => {
 
 .new-chat-btn:hover {
   background-color: #45a049;
+}
+
+.blocked-users-btn {
+  padding: 0.5rem 1rem;
+  background-color: #FF9800;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.blocked-users-btn:hover {
+  background-color: #F57C00;
 }
 
 .logout-btn {
