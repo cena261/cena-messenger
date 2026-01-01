@@ -79,9 +79,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useRealtimeStore } from '../stores/realtime'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const realtimeStore = useRealtimeStore()
 
 const username = ref('')
 const password = ref('')
@@ -109,6 +111,7 @@ async function handleSubmit() {
       await authStore.login(username.value, password.value)
     }
 
+    realtimeStore.initializeSubscriptions()
     router.push('/conversations')
   } catch (err) {
     error.value = err.response?.data?.message || 'Authentication failed'

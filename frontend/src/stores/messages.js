@@ -16,6 +16,8 @@ export const useMessagesStore = defineStore('messages', () => {
       const response = await messagesApi.getMessages(conversationId, page, size)
       const messages = response.data
 
+      console.log('Fetched messages:', messages)
+
       if (!messagesByConversation.value[conversationId]) {
         messagesByConversation.value[conversationId] = []
       }
@@ -111,14 +113,15 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   function handleMessageUpdate(updateData) {
+    console.log('handleMessageUpdate called with:', updateData)
     const { conversationId, messageId, action, content, updatedAt, isDeleted } = updateData
 
-    if (action === 'EDITED') {
+    if (action === 'EDIT' || action === 'EDITED') {
       updateMessageInStore(conversationId, messageId, {
         content,
         updatedAt
       })
-    } else if (action === 'DELETED') {
+    } else if (action === 'DELETE' || action === 'DELETED') {
       updateMessageInStore(conversationId, messageId, {
         content: null,
         isDeleted: true,
