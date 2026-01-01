@@ -118,6 +118,7 @@ public class UserService {
         }
 
         UserSearchResponse searchResponse = UserSearchResponse.builder()
+            .userId(user.getId())
             .username(user.getUsername())
             .displayName(user.getDisplayName())
             .avatarUrl(user.getAvatarUrl())
