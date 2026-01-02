@@ -66,11 +66,15 @@
             <div v-else-if="message.type === 'IMAGE'" class="media-content">
               <img :src="message.mediaUrl" :alt="message.mediaMetadata?.fileName" class="media-image" />
             </div>
-            <div v-else-if="message.type === 'VIDEO'" class="media-content">
-              <video :src="message.mediaUrl" controls class="media-video"></video>
+            <div v-else-if="message.type === 'VIDEO'" class="media-content media-placeholder">
+              <div class="placeholder-icon">🎥</div>
+              <div class="placeholder-text">Video: {{ message.mediaMetadata?.fileName || 'video file' }}</div>
+              <a :href="message.mediaUrl" target="_blank" class="media-link">Download</a>
             </div>
-            <div v-else-if="message.type === 'AUDIO'" class="media-content">
-              <audio :src="message.mediaUrl" controls class="media-audio"></audio>
+            <div v-else-if="message.type === 'AUDIO'" class="media-content media-placeholder">
+              <div class="placeholder-icon">🎵</div>
+              <div class="placeholder-text">Audio: {{ message.mediaMetadata?.fileName || 'audio file' }}</div>
+              <a :href="message.mediaUrl" target="_blank" class="media-link">Download</a>
             </div>
             <div v-else-if="message.type === 'MEDIA'" class="media-content">
               <a :href="message.mediaUrl" target="_blank" class="media-link">
@@ -96,6 +100,9 @@
 
           <div class="message-footer">
             <div class="message-time">{{ formatTime(message.createdAt) }}</div>
+            <div v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)" class="message-seen">
+              {{ formatSeenIndicator(getSeenByUsers(message)) }}
+            </div>
             <div v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)" class="message-actions">
               <button v-if="message.type === 'TEXT'" @click="startEdit(message)" class="action-btn">Edit</button>
               <button @click="handleDeleteMessage(message.id)" class="action-btn">Delete</button>
@@ -259,14 +266,40 @@ function getUserDisplayName(userId) {
   return member?.displayName || member?.username || 'Unknown'
 }
 
+function getSeenByUsers(message) {
+  if (!conversationsStore.activeConversationId) return []
+  if (message.senderId !== authStore.user?.id) return []
+  if (isMessageDeleted(message)) return []
+
+  return realtimeStore.getMessageSeenByUsers(
+    conversationsStore.activeConversationId,
+    message,
+    messages.value
+  )
+}
+
+function formatSeenIndicator(seenByUsers) {
+  if (!seenByUsers || seenByUsers.length === 0) return ''
+
+  if (seenByUsers.length === 1) {
+    return `Seen by ${seenByUsers[0].displayName}`
+  } else if (seenByUsers.length === 2) {
+    return `Seen by ${seenByUsers[0].displayName} and ${seenByUsers[1].displayName}`
+  } else {
+    return `Seen by ${seenByUsers.length} people`
+  }
+}
+
 watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
   if (oldId) {
+    handleStopTyping()
     realtimeStore.unsubscribeFromConversation(oldId)
   }
 
   if (newId) {
     cancelEdit()
     cancelReply()
+    showReactionPicker.value = null
     await loadMessages()
     realtimeStore.subscribeToConversation(newId)
     await nextTick()
@@ -294,6 +327,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  handleStopTyping()
   if (conversationsStore.activeConversationId) {
     realtimeStore.unsubscribeFromConversation(conversationsStore.activeConversationId)
   }
@@ -543,6 +577,11 @@ async function handleToggleReaction(messageId, emoji) {
 function handleTyping() {
   if (!conversationsStore.activeConversationId) return
 
+  if (!newMessage.value.trim()) {
+    handleStopTyping()
+    return
+  }
+
   if (!isTyping.value) {
     isTyping.value = true
     realtimeStore.sendTypingStart(conversationsStore.activeConversationId)
@@ -777,6 +816,12 @@ function handleStopTyping() {
   color: #999;
 }
 
+.message-seen {
+  font-size: 0.7rem;
+  color: #2196F3;
+  font-style: italic;
+}
+
 .message-actions {
   display: flex;
   gap: 0.5rem;
@@ -874,14 +919,25 @@ function handleStopTyping() {
   cursor: pointer;
 }
 
-.media-video {
-  max-width: 400px;
-  max-height: 300px;
+.media-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background-color: #f5f5f5;
   border-radius: 8px;
+  border: 1px solid #ddd;
 }
 
-.media-audio {
-  width: 300px;
+.placeholder-icon {
+  font-size: 2rem;
+}
+
+.placeholder-text {
+  font-size: 0.875rem;
+  color: #666;
+  text-align: center;
 }
 
 .media-link {

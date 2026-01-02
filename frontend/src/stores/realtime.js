@@ -185,6 +185,21 @@ export const useRealtimeStore = defineStore('realtime', () => {
     }
   }
 
+  function clearSeenReceipts(conversationId) {
+    if (conversationId) {
+      delete seenReceipts.value[conversationId]
+    } else {
+      seenReceipts.value = {}
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('auth:sessionExpired', () => {
+      clearTypingUsers()
+      clearSeenReceipts()
+    })
+  }
+
   function getSeenReceipts(conversationId) {
     return seenReceipts.value[conversationId] || {}
   }
@@ -193,6 +208,46 @@ export const useRealtimeStore = defineStore('realtime', () => {
     const receipts = seenReceipts.value[conversationId]
     if (!receipts) return false
     return receipts[userId] === messageId
+  }
+
+  function getMessageSeenByUsers(conversationId, message, allMessages) {
+    const messagesStore = useMessagesStore()
+    const authStore = useAuthStore()
+    const conversationsStore = useConversationsStore()
+
+    if (!message || !conversationId) return []
+
+    const receipts = seenReceipts.value[conversationId] || {}
+    const seenByUserIds = []
+
+    for (const [userId, lastReadMessageId] of Object.entries(receipts)) {
+      if (userId === authStore.user?.id) {
+        continue
+      }
+
+      const lastReadMessage = allMessages.find(m => m.id === lastReadMessageId)
+      if (!lastReadMessage) {
+        continue
+      }
+
+      const messageTime = new Date(message.createdAt).getTime()
+      const lastReadTime = new Date(lastReadMessage.createdAt).getTime()
+
+      if (messageTime <= lastReadTime) {
+        seenByUserIds.push(userId)
+      }
+    }
+
+    const conversation = conversationsStore.conversations.find(c => c.id === conversationId)
+    if (!conversation) return []
+
+    return seenByUserIds.map(userId => {
+      const member = conversation.members?.find(m => m.userId === userId)
+      return {
+        userId,
+        displayName: member?.displayName || member?.username || 'Unknown'
+      }
+    })
   }
 
   return {
@@ -206,7 +261,9 @@ export const useRealtimeStore = defineStore('realtime', () => {
     getTypingUsers,
     getTypingUsersDisplay,
     clearTypingUsers,
+    clearSeenReceipts,
     getSeenReceipts,
-    isMessageSeenBy
+    isMessageSeenBy,
+    getMessageSeenByUsers
   }
 })
