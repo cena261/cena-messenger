@@ -147,6 +147,15 @@
       <div v-if="uploadingFile" class="uploading-indicator">
         Uploading {{ uploadingFile.name }}...
       </div>
+      <div v-if="sendError" class="error-message">
+        {{ sendError }}
+      </div>
+      <div v-if="editError" class="error-message">
+        {{ editError }}
+      </div>
+      <div v-if="deleteError" class="error-message">
+        {{ deleteError }}
+      </div>
       <form @submit.prevent="sendMessageHandler">
         <input
           type="file"
@@ -155,16 +164,16 @@
           style="display: none"
           accept="image/*,video/*,audio/*"
         />
-        <button type="button" @click="openFileDialog" class="attach-btn">📎</button>
+        <button type="button" @click="openFileDialog" class="attach-btn" :disabled="!authStore.isAuthenticated">📎</button>
         <input
           v-model="newMessage"
           type="text"
           placeholder="Type a message..."
           ref="messageInput"
           @input="handleTyping"
-          :disabled="isSendingMessage"
+          :disabled="isSendingMessage || !authStore.isAuthenticated"
         />
-        <button type="submit" :disabled="!newMessage.trim() || isSendingMessage">Send</button>
+        <button type="submit" :disabled="!newMessage.trim() || isSendingMessage || !authStore.isAuthenticated">Send</button>
       </form>
     </div>
 
@@ -208,6 +217,9 @@ const availableReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 const typingTimeout = ref(null)
 const isTyping = ref(false)
 const isSendingMessage = ref(false)
+const sendError = ref(null)
+const editError = ref(null)
+const deleteError = ref(null)
 
 const conversationName = computed(() => {
   const conversation = conversationsStore.activeConversation
@@ -300,6 +312,9 @@ watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
     cancelEdit()
     cancelReply()
     showReactionPicker.value = null
+    sendError.value = null
+    editError.value = null
+    deleteError.value = null
     await loadMessages()
     realtimeStore.subscribeToConversation(newId)
     await nextTick()
@@ -348,6 +363,7 @@ async function sendMessageHandler() {
 
   handleStopTyping()
   isSendingMessage.value = true
+  sendError.value = null
 
   try {
     await messagesStore.sendMessage(
@@ -361,6 +377,7 @@ async function sendMessageHandler() {
     scrollToBottomIfNearBottom()
   } catch (error) {
     console.error('Failed to send message:', error)
+    sendError.value = error.response?.data?.message || 'Failed to send message. Please try again.'
   } finally {
     isSendingMessage.value = false
   }
@@ -371,6 +388,7 @@ function startEdit(message) {
   editingMessageId.value = message.id
   editContent.value = message.content
   originalEditContent.value = message.content
+  editError.value = null
 }
 
 async function saveEdit() {
@@ -381,6 +399,7 @@ async function saveEdit() {
 
   const messageId = editingMessageId.value
   const conversationId = conversationsStore.activeConversationId
+  editError.value = null
 
   try {
     await messagesStore.editMessage(
@@ -396,6 +415,7 @@ async function saveEdit() {
     if (message && originalEditContent.value) {
       message.content = originalEditContent.value
     }
+    editError.value = error.response?.data?.message || 'Failed to edit message.'
     cancelEdit()
   }
 }
@@ -410,6 +430,8 @@ async function handleDeleteMessage(messageId) {
   const confirmed = confirm('Are you sure you want to delete this message?')
   if (!confirmed) return
 
+  deleteError.value = null
+
   try {
     await messagesStore.deleteMessage(
       messageId,
@@ -417,6 +439,7 @@ async function handleDeleteMessage(messageId) {
     )
   } catch (error) {
     console.error('Failed to delete message:', error)
+    deleteError.value = error.response?.data?.message || 'Failed to delete message. Please try again.'
   }
 }
 
@@ -576,6 +599,8 @@ async function handleToggleReaction(messageId, emoji) {
 
 function handleTyping() {
   if (!conversationsStore.activeConversationId) return
+
+  sendError.value = null
 
   if (!newMessage.value.trim()) {
     handleStopTyping()
@@ -968,6 +993,14 @@ function handleStopTyping() {
   border-bottom: 1px solid #ddd;
   font-size: 0.875rem;
   color: #666;
+}
+
+.error-message {
+  padding: 0.5rem 1rem;
+  background-color: #ffebee;
+  border-bottom: 1px solid #ef5350;
+  font-size: 0.875rem;
+  color: #c62828;
 }
 
 .typing-indicator {
