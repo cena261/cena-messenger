@@ -47,7 +47,10 @@ public class GroupManagementService {
                 .orElseThrow(() -> new AppException(ErrorCode.CONVERSATION_ACCESS_DENIED));
 
         if ("OWNER".equals(member.getRole())) {
-            throw new AppException(ErrorCode.OWNER_CANNOT_LEAVE);
+            long memberCount = conversationMemberRepository.countByConversationId(request.getConversationId());
+            if (memberCount > 1) {
+                throw new AppException(ErrorCode.OWNER_CANNOT_LEAVE);
+            }
         }
 
         conversationMemberRepository.delete(member);
