@@ -6,16 +6,23 @@
   <div v-else class="chat-view">
     <div class="chat-header">
       <h3>{{ conversationName }}</h3>
-      <div v-if="otherUserId" class="header-actions">
+      <div class="header-actions">
         <button
-          v-if="!blockingStore.isUserBlocked(otherUserId)"
+          v-if="conversationsStore.activeConversation?.type === 'GROUP'"
+          @click="openGroupManagement"
+          class="group-settings-btn"
+        >
+          Group Settings
+        </button>
+        <button
+          v-if="otherUserId && !blockingStore.isUserBlocked(otherUserId)"
           @click="handleBlockUser"
           class="block-btn"
         >
           Block User
         </button>
         <button
-          v-else
+          v-if="otherUserId && blockingStore.isUserBlocked(otherUserId)"
           @click="handleUnblockUser"
           class="unblock-btn"
         >
@@ -55,18 +62,32 @@
           </div>
 
           <div v-else class="message-content">
-            <span v-if="message.isDeleted" class="deleted-message">This message was deleted</span>
+            <span v-if="isMessageDeleted(message)" class="deleted-message">This message was deleted</span>
+            <div v-else-if="message.type === 'IMAGE'" class="media-content">
+              <img :src="message.mediaUrl" :alt="message.mediaMetadata?.fileName" class="media-image" />
+            </div>
+            <div v-else-if="message.type === 'VIDEO'" class="media-content">
+              <video :src="message.mediaUrl" controls class="media-video"></video>
+            </div>
+            <div v-else-if="message.type === 'AUDIO'" class="media-content">
+              <audio :src="message.mediaUrl" controls class="media-audio"></audio>
+            </div>
+            <div v-else-if="message.type === 'MEDIA'" class="media-content">
+              <a :href="message.mediaUrl" target="_blank" class="media-link">
+                {{ message.mediaMetadata?.fileName || 'Download file' }}
+              </a>
+            </div>
             <span v-else>{{ message.content }}</span>
-            <span v-if="!message.isDeleted && isEdited(message)" class="edited-indicator">(edited)</span>
+            <span v-if="!isMessageDeleted(message) && isEdited(message)" class="edited-indicator">(edited)</span>
           </div>
 
           <div class="message-footer">
             <div class="message-time">{{ formatTime(message.createdAt) }}</div>
-            <div v-if="message.senderId === authStore.user?.id && !message.isDeleted" class="message-actions">
-              <button @click="startEdit(message)" class="action-btn">Edit</button>
+            <div v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)" class="message-actions">
+              <button v-if="message.type === 'TEXT'" @click="startEdit(message)" class="action-btn">Edit</button>
               <button @click="handleDeleteMessage(message.id)" class="action-btn">Delete</button>
             </div>
-            <div v-if="!message.isDeleted" class="message-actions">
+            <div v-if="!isMessageDeleted(message)" class="message-actions">
               <button @click="startReply(message)" class="action-btn">Reply</button>
             </div>
           </div>
@@ -79,7 +100,18 @@
         <span>Replying to {{ replyingTo.senderDisplayName || replyingTo.senderUsername }}: {{ replyingTo.content?.substring(0, 50) }}...</span>
         <button @click="cancelReply" class="cancel-reply-btn">✕</button>
       </div>
+      <div v-if="uploadingFile" class="uploading-indicator">
+        Uploading {{ uploadingFile.name }}...
+      </div>
       <form @submit.prevent="sendMessageHandler">
+        <input
+          type="file"
+          ref="fileInput"
+          @change="handleFileSelect"
+          style="display: none"
+          accept="image/*,video/*,audio/*"
+        />
+        <button type="button" @click="openFileDialog" class="attach-btn">📎</button>
         <input
           v-model="newMessage"
           type="text"
@@ -89,6 +121,13 @@
         <button type="submit" :disabled="!newMessage.trim()">Send</button>
       </form>
     </div>
+
+    <GroupManagementModal
+      :isOpen="isGroupManagementOpen"
+      :conversation="conversationsStore.activeConversation"
+      @close="closeGroupManagement"
+      @groupUpdated="handleGroupUpdated"
+    />
   </div>
 </template>
 
@@ -99,6 +138,7 @@ import { useConversationsStore } from '../stores/conversations'
 import { useMessagesStore } from '../stores/messages'
 import { useRealtimeStore } from '../stores/realtime'
 import { useBlockingStore } from '../stores/blocking'
+import GroupManagementModal from '../components/GroupManagementModal.vue'
 
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
@@ -112,6 +152,9 @@ const messageInput = ref(null)
 const editingMessageId = ref(null)
 const editContent = ref('')
 const replyingTo = ref(null)
+const fileInput = ref(null)
+const uploadingFile = ref(null)
+const isGroupManagementOpen = ref(false)
 
 const conversationName = computed(() => {
   const conversation = conversationsStore.activeConversation
@@ -136,6 +179,10 @@ const otherUserId = computed(() => {
   const otherMember = conversation.members?.find(m => m.userId !== authStore.user?.id)
   return otherMember?.userId || null
 })
+
+function isMessageDeleted(message) {
+  return message.isDeleted === true || message.deleted === true
+}
 
 watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
   if (oldId) {
@@ -200,7 +247,7 @@ async function sendMessageHandler() {
 }
 
 function startEdit(message) {
-  if (message.type !== 'TEXT' || message.isDeleted) return
+  if (message.type !== 'TEXT' || isMessageDeleted(message)) return
   editingMessageId.value = message.id
   editContent.value = message.content
 }
@@ -256,7 +303,7 @@ function getReplyToUsername(replyToId) {
 function getReplyToPreview(replyToId) {
   const msg = messages.value.find(m => m.id === replyToId)
   if (!msg) return ''
-  if (msg.isDeleted) return 'Deleted message'
+  if (isMessageDeleted(msg)) return 'Deleted message'
   return msg.content?.substring(0, 30) || ''
 }
 
@@ -305,6 +352,61 @@ async function handleUnblockUser() {
     alert('Failed to unblock user. Please try again.')
   }
 }
+
+function openFileDialog() {
+  fileInput.value?.click()
+}
+
+async function handleFileSelect(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  uploadingFile.value = file
+
+  try {
+    let mediaType = 'MEDIA'
+
+    if (file.type.startsWith('image/')) {
+      mediaType = 'IMAGE'
+    } else if (file.type.startsWith('video/')) {
+      mediaType = 'VIDEO'
+    } else if (file.type.startsWith('audio/')) {
+      mediaType = 'AUDIO'
+    }
+
+    await messagesStore.sendMediaMessage(
+      conversationsStore.activeConversationId,
+      file,
+      mediaType,
+      replyingTo.value?.id || null
+    )
+
+    cancelReply()
+    await nextTick()
+    scrollToBottom()
+  } catch (error) {
+    console.error('Failed to send media message:', error)
+    alert('Failed to send media file. Please try again.')
+  } finally {
+    uploadingFile.value = null
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
+  }
+}
+
+async function openGroupManagement() {
+  await conversationsStore.fetchConversations()
+  isGroupManagementOpen.value = true
+}
+
+function closeGroupManagement() {
+  isGroupManagementOpen.value = false
+}
+
+async function handleGroupUpdated() {
+  await conversationsStore.fetchConversations()
+}
 </script>
 
 <style scoped>
@@ -341,6 +443,20 @@ async function handleUnblockUser() {
 .header-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.group-settings-btn {
+  padding: 0.5rem 1rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.group-settings-btn:hover {
+  background-color: #1976D2;
 }
 
 .block-btn {
@@ -582,5 +698,56 @@ async function handleUnblockUser() {
 .message-input-container button[type="submit"]:disabled {
   background-color: #ccc;
   cursor: not-allowed;
+}
+
+.media-content {
+  margin-top: 0.5rem;
+}
+
+.media-image {
+  max-width: 300px;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.media-video {
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: 8px;
+}
+
+.media-audio {
+  width: 300px;
+}
+
+.media-link {
+  color: #2196F3;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.media-link:hover {
+  text-decoration: underline;
+}
+
+.attach-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+}
+
+.attach-btn:hover {
+  opacity: 0.7;
+}
+
+.uploading-indicator {
+  padding: 0.5rem 1rem;
+  background-color: #e3f2fd;
+  border-bottom: 1px solid #ddd;
+  font-size: 0.875rem;
+  color: #666;
 }
 </style>
