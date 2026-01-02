@@ -119,6 +119,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function handleSessionExpired() {
+    clearAccessToken()
+    user.value = null
+    isAuthenticated.value = false
+    websocketService.disconnect()
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('auth:sessionExpired', handleSessionExpired)
+  }
+
   return {
     user,
     isAuthenticated,

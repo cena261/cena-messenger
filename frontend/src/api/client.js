@@ -43,6 +43,13 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // Skip refresh for /auth/refresh endpoint to prevent infinite loop
+    if (originalRequest.url?.includes('/auth/refresh')) {
+      clearAccessToken()
+      window.dispatchEvent(new CustomEvent('auth:sessionExpired'))
+      return Promise.reject(error)
+    }
+
     // If 401 and not already retried, attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
@@ -62,8 +69,9 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
         return apiClient(originalRequest)
       } catch (refreshError) {
-        // Refresh failed, clear token and reject
+        // Refresh failed, clear token and dispatch event
         clearAccessToken()
+        window.dispatchEvent(new CustomEvent('auth:sessionExpired'))
         return Promise.reject(refreshError)
       }
     }

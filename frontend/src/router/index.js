@@ -44,4 +44,8 @@ router.beforeEach(async (to, from, next) => {
   }
 })
 
+window.addEventListener('auth:sessionExpired', () => {
+  router.push('/login')
+})
+
 export default router
