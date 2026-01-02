@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as messagesApi from '../api/messages'
+import * as mediaApi from '../api/media'
 
 export const useMessagesStore = defineStore('messages', () => {
   // Messages grouped by conversation ID
@@ -43,6 +44,49 @@ export const useMessagesStore = defineStore('messages', () => {
       return newMessage
     } catch (err) {
       console.error('Failed to send message:', err)
+      throw err
+    }
+  }
+
+  async function sendMediaMessage(conversationId, file, mediaType, replyTo = null) {
+    try {
+      const presignedResponse = await mediaApi.requestPresignedUrl(
+        conversationId,
+        file.name,
+        file.size,
+        file.type
+      )
+
+      const { presignedUrl, fileKey } = presignedResponse.data
+
+      await mediaApi.uploadToObjectStorage(presignedUrl, file, file.type)
+
+      const mediaMetadata = {
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type
+      }
+
+      if (file.type.startsWith('image/')) {
+        const img = await createImageBitmap(file)
+        mediaMetadata.width = img.width
+        mediaMetadata.height = img.height
+      }
+
+      const response = await mediaApi.createMediaMessage(
+        conversationId,
+        fileKey,
+        mediaType,
+        mediaMetadata,
+        replyTo
+      )
+
+      const newMessage = response.data
+      addMessage(conversationId, newMessage)
+
+      return newMessage
+    } catch (err) {
+      console.error('Failed to send media message:', err)
       throw err
     }
   }
@@ -114,7 +158,7 @@ export const useMessagesStore = defineStore('messages', () => {
 
   function handleMessageUpdate(updateData) {
     console.log('handleMessageUpdate called with:', updateData)
-    const { conversationId, messageId, action, content, updatedAt, isDeleted } = updateData
+    const { conversationId, messageId, action, content, updatedAt, isDeleted, deleted } = updateData
 
     if (action === 'EDIT' || action === 'EDITED') {
       updateMessageInStore(conversationId, messageId, {
@@ -124,7 +168,8 @@ export const useMessagesStore = defineStore('messages', () => {
     } else if (action === 'DELETE' || action === 'DELETED') {
       updateMessageInStore(conversationId, messageId, {
         content: null,
-        isDeleted: true,
+        isDeleted: isDeleted !== undefined ? isDeleted : deleted,
+        deleted: deleted !== undefined ? deleted : isDeleted,
         updatedAt
       })
     }
@@ -148,6 +193,7 @@ export const useMessagesStore = defineStore('messages', () => {
     error,
     fetchMessages,
     sendMessage,
+    sendMediaMessage,
     editMessage,
     deleteMessage,
     addMessage,
