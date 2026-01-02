@@ -4,6 +4,7 @@
       <div class="list-header">
         <h2>Conversations</h2>
         <div class="header-actions">
+          <button @click="openSearchModal" class="search-btn">🔍 Search</button>
           <button @click="openModal" class="new-chat-btn">New Chat</button>
           <button @click="openBlockedUsersModal" class="blocked-users-btn">Blocked</button>
           <button @click="handleLogout" class="logout-btn">Logout</button>
@@ -73,6 +74,13 @@
       :isOpen="isBlockedUsersModalOpen"
       @close="closeBlockedUsersModal"
     />
+
+    <SearchModal
+      :isOpen="isSearchModalOpen"
+      @close="closeSearchModal"
+      @selectConversation="handleSearchSelectConversation"
+      @selectMessage="handleSearchSelectMessage"
+    />
   </div>
 </template>
 
@@ -86,6 +94,7 @@ import websocketService from '../services/websocket'
 import ChatView from './ChatView.vue'
 import NewConversationModal from '../components/NewConversationModal.vue'
 import BlockedUsersModal from '../components/BlockedUsersModal.vue'
+import SearchModal from '../components/SearchModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -94,6 +103,7 @@ const blockingStore = useBlockingStore()
 
 const isModalOpen = ref(false)
 const isBlockedUsersModalOpen = ref(false)
+const isSearchModalOpen = ref(false)
 let unreadSubscription = null
 let seenSubscription = null
 
@@ -153,6 +163,22 @@ function openBlockedUsersModal() {
 
 function closeBlockedUsersModal() {
   isBlockedUsersModalOpen.value = false
+}
+
+function openSearchModal() {
+  isSearchModalOpen.value = true
+}
+
+function closeSearchModal() {
+  isSearchModalOpen.value = false
+}
+
+async function handleSearchSelectConversation(conversationId) {
+  await conversationsStore.selectConversation(conversationId)
+}
+
+async function handleSearchSelectMessage(message) {
+  await conversationsStore.selectConversation(message.conversationId)
 }
 
 async function handleConversationCreated(conversation) {
@@ -220,6 +246,20 @@ onUnmounted(() => {
 .header-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.search-btn {
+  padding: 0.5rem 1rem;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.search-btn:hover {
+  background-color: #1976D2;
 }
 
 .new-chat-btn {
