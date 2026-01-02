@@ -81,6 +81,19 @@
             <span v-if="!isMessageDeleted(message) && isEdited(message)" class="edited-indicator">(edited)</span>
           </div>
 
+          <div v-if="!isMessageDeleted(message) && message.reactions && Object.keys(message.reactions).length > 0" class="message-reactions">
+            <span
+              v-for="(emoji, userId) in message.reactions"
+              :key="userId"
+              class="reaction-item"
+              :class="{ 'own-reaction': userId === authStore.user?.id }"
+              @click="handleToggleReaction(message.id, emoji)"
+              :title="`${getUserDisplayName(userId)}`"
+            >
+              {{ emoji }}
+            </span>
+          </div>
+
           <div class="message-footer">
             <div class="message-time">{{ formatTime(message.createdAt) }}</div>
             <div v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)" class="message-actions">
@@ -89,9 +102,33 @@
             </div>
             <div v-if="!isMessageDeleted(message)" class="message-actions">
               <button @click="startReply(message)" class="action-btn">Reply</button>
+              <button @click="toggleReactionPicker(message.id)" class="action-btn">React</button>
             </div>
           </div>
+
+          <div v-if="showReactionPicker === message.id" class="reaction-picker">
+            <span
+              v-for="emoji in availableReactions"
+              :key="emoji"
+              class="reaction-emoji"
+              @click="handleToggleReaction(message.id, emoji)"
+            >
+              {{ emoji }}
+            </span>
+          </div>
         </div>
+      </div>
+
+      <div v-show="typingUsersDisplay.length > 0" class="typing-indicator">
+        <span v-if="typingUsersDisplay.length === 1">
+          {{ typingUsersDisplay[0].displayName }} is typing...
+        </span>
+        <span v-else-if="typingUsersDisplay.length === 2">
+          {{ typingUsersDisplay[0].displayName }} and {{ typingUsersDisplay[1].displayName }} are typing...
+        </span>
+        <span v-else>
+          {{ typingUsersDisplay.length }} people are typing...
+        </span>
       </div>
     </div>
 
@@ -117,6 +154,7 @@
           type="text"
           placeholder="Type a message..."
           ref="messageInput"
+          @input="handleTyping"
         />
         <button type="submit" :disabled="!newMessage.trim()">Send</button>
       </form>
@@ -138,6 +176,7 @@ import { useConversationsStore } from '../stores/conversations'
 import { useMessagesStore } from '../stores/messages'
 import { useRealtimeStore } from '../stores/realtime'
 import { useBlockingStore } from '../stores/blocking'
+import * as conversationsApi from '../api/conversations'
 import GroupManagementModal from '../components/GroupManagementModal.vue'
 
 const authStore = useAuthStore()
@@ -155,6 +194,10 @@ const replyingTo = ref(null)
 const fileInput = ref(null)
 const uploadingFile = ref(null)
 const isGroupManagementOpen = ref(false)
+const showReactionPicker = ref(null)
+const availableReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+const typingTimeout = ref(null)
+const isTyping = ref(false)
 
 const conversationName = computed(() => {
   const conversation = conversationsStore.activeConversation
@@ -180,8 +223,37 @@ const otherUserId = computed(() => {
   return otherMember?.userId || null
 })
 
+const typingUsersDisplay = computed(() => {
+  if (!conversationsStore.activeConversationId) return []
+
+  const conversationId = conversationsStore.activeConversationId
+  const typingUserIds = realtimeStore.typingUsers[conversationId] || []
+
+  if (typingUserIds.length === 0) return []
+
+  const conversation = conversationsStore.activeConversation
+  if (!conversation) return []
+
+  return typingUserIds.map(userId => {
+    const member = conversation.members?.find(m => m.userId === userId)
+    const displayName = member?.displayName || member?.username || 'Unknown'
+    return {
+      userId,
+      displayName
+    }
+  })
+})
+
 function isMessageDeleted(message) {
   return message.isDeleted === true || message.deleted === true
+}
+
+function getUserDisplayName(userId) {
+  const conversation = conversationsStore.activeConversation
+  if (!conversation) return 'Unknown'
+
+  const member = conversation.members?.find(m => m.userId === userId)
+  return member?.displayName || member?.username || 'Unknown'
 }
 
 watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
@@ -204,6 +276,11 @@ watch(messages, async () => {
   scrollToBottom()
 }, { deep: true })
 
+watch(typingUsersDisplay, async () => {
+  await nextTick()
+  scrollToBottom()
+}, { deep: true })
+
 onMounted(async () => {
   if (conversationsStore.activeConversationId) {
     await loadMessages()
@@ -222,6 +299,7 @@ onUnmounted(() => {
 async function loadMessages() {
   try {
     await messagesStore.fetchMessages(conversationsStore.activeConversationId)
+    await conversationsApi.markConversationAsRead(conversationsStore.activeConversationId)
   } catch (error) {
     console.error('Failed to load messages:', error)
   }
@@ -230,6 +308,8 @@ async function loadMessages() {
 async function sendMessageHandler() {
   const content = newMessage.value.trim()
   if (!content) return
+
+  handleStopTyping()
 
   try {
     await messagesStore.sendMessage(
@@ -406,6 +486,54 @@ function closeGroupManagement() {
 
 async function handleGroupUpdated() {
   await conversationsStore.fetchConversations()
+}
+
+function toggleReactionPicker(messageId) {
+  showReactionPicker.value = showReactionPicker.value === messageId ? null : messageId
+}
+
+async function handleToggleReaction(messageId, emoji) {
+  showReactionPicker.value = null
+  try {
+    await messagesStore.toggleReaction(
+      conversationsStore.activeConversationId,
+      messageId,
+      emoji
+    )
+  } catch (error) {
+    console.error('Failed to toggle reaction:', error)
+  }
+}
+
+function handleTyping() {
+  if (!conversationsStore.activeConversationId) return
+
+  if (!isTyping.value) {
+    isTyping.value = true
+    realtimeStore.sendTypingStart(conversationsStore.activeConversationId)
+  }
+
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value)
+  }
+
+  typingTimeout.value = setTimeout(() => {
+    handleStopTyping()
+  }, 3000)
+}
+
+function handleStopTyping() {
+  if (!conversationsStore.activeConversationId) return
+
+  if (isTyping.value) {
+    isTyping.value = false
+    realtimeStore.sendTypingStop(conversationsStore.activeConversationId)
+  }
+
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value)
+    typingTimeout.value = null
+  }
 }
 </script>
 
@@ -749,5 +877,64 @@ async function handleGroupUpdated() {
   border-bottom: 1px solid #ddd;
   font-size: 0.875rem;
   color: #666;
+}
+
+.typing-indicator {
+  padding: 0.75rem 1rem;
+  background-color: #f5f5f5;
+  border-top: 1px solid #ddd;
+  font-size: 0.875rem;
+  color: #666;
+  font-style: italic;
+}
+
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.reaction-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  background-color: #f0f0f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.reaction-item:hover {
+  background-color: #e0e0e0;
+}
+
+.reaction-item.own-reaction {
+  background-color: #d4edda;
+  border: 1px solid #4CAF50;
+}
+
+.reaction-picker {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.reaction-emoji {
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.reaction-emoji:hover {
+  background-color: #f0f0f0;
 }
 </style>

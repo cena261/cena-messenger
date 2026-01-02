@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import * as messagesApi from '../api/messages'
 import * as mediaApi from '../api/media'
+import * as reactionsApi from '../api/reactions'
 
 export const useMessagesStore = defineStore('messages', () => {
   // Messages grouped by conversation ID
@@ -156,6 +157,22 @@ export const useMessagesStore = defineStore('messages', () => {
     }
   }
 
+  async function toggleReaction(conversationId, messageId, reactionType) {
+    try {
+      const response = await reactionsApi.toggleReaction(messageId, reactionType)
+      const reactionData = response.data
+
+      updateMessageInStore(conversationId, messageId, {
+        reactions: reactionData.allReactions || {}
+      })
+
+      return reactionData
+    } catch (err) {
+      console.error('Failed to toggle reaction:', err)
+      throw err
+    }
+  }
+
   function handleMessageUpdate(updateData) {
     console.log('handleMessageUpdate called with:', updateData)
     const { conversationId, messageId, action, content, updatedAt, isDeleted, deleted } = updateData
@@ -173,6 +190,14 @@ export const useMessagesStore = defineStore('messages', () => {
         updatedAt
       })
     }
+  }
+
+  function handleReactionUpdate(reactionData) {
+    const { conversationId, messageId, allReactions } = reactionData
+
+    updateMessageInStore(conversationId, messageId, {
+      reactions: allReactions || {}
+    })
   }
 
   function getMessages(conversationId) {
@@ -197,8 +222,10 @@ export const useMessagesStore = defineStore('messages', () => {
     editMessage,
     deleteMessage,
     addMessage,
+    toggleReaction,
     getMessages,
     clearMessages,
-    handleMessageUpdate
+    handleMessageUpdate,
+    handleReactionUpdate
   }
 })

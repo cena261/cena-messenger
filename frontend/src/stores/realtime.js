@@ -60,6 +60,11 @@ export const useRealtimeStore = defineStore('realtime', () => {
       console.log('Group event received:', data)
       await handleGroupEvent(data)
     })
+
+    websocketService.subscribe(`/user/queue/reactions`, (data) => {
+      console.log('Reaction event received:', data)
+      messagesStore.handleReactionUpdate(data)
+    })
   }
 
   async function handleGroupEvent(data) {
@@ -108,23 +113,20 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function sendTypingStart(conversationId) {
-    console.log('sendTypingStart called, conversationId:', conversationId)
     websocketService.send('/app/typing/start', { conversationId })
   }
 
   function sendTypingStop(conversationId) {
-    console.log('sendTypingStop called, conversationId:', conversationId)
     websocketService.send('/app/typing/stop', { conversationId })
   }
 
   function handleTypingEvent(data) {
     const authStore = useAuthStore()
-    const { conversationId, userId, typing } = data
+    const { conversationId, userId, isTyping, typing } = data
 
-    console.log('handleTypingEvent - conversationId:', conversationId, 'userId:', userId, 'typing:', typing)
+    const typingStatus = isTyping !== undefined ? isTyping : typing
 
     if (userId === authStore.user?.id) {
-      console.log('Ignoring own typing event')
       return
     }
 
@@ -132,16 +134,12 @@ export const useRealtimeStore = defineStore('realtime', () => {
       typingUsers.value[conversationId] = []
     }
 
-    if (typing) {
+    if (typingStatus) {
       if (!typingUsers.value[conversationId].includes(userId)) {
         typingUsers.value[conversationId] = [...typingUsers.value[conversationId], userId]
-        console.log('Added user to typing list:', typingUsers.value[conversationId])
       }
     } else {
-      typingUsers.value[conversationId] = typingUsers.value[conversationId].filter(
-        id => id !== userId
-      )
-      console.log('Removed user from typing list:', typingUsers.value[conversationId])
+      typingUsers.value[conversationId] = typingUsers.value[conversationId].filter(id => id !== userId)
     }
   }
 
@@ -157,6 +155,26 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
   function getTypingUsers(conversationId) {
     return typingUsers.value[conversationId] || []
+  }
+
+  function getTypingUsersDisplay(conversationId) {
+    const conversationsStore = useConversationsStore()
+    const conversation = conversationsStore.conversations.find(c => c.id === conversationId)
+
+    if (!conversation) {
+      return []
+    }
+
+    const typingUserIds = typingUsers.value[conversationId] || []
+
+    return typingUserIds.map(userId => {
+      const member = conversation.members?.find(m => m.userId === userId)
+      const displayName = member?.displayName || member?.username || 'Unknown'
+      return {
+        userId,
+        displayName
+      }
+    })
   }
 
   function clearTypingUsers(conversationId) {
@@ -186,6 +204,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
     sendTypingStart,
     sendTypingStop,
     getTypingUsers,
+    getTypingUsersDisplay,
     clearTypingUsers,
     getSeenReceipts,
     isMessageSeenBy
