@@ -55,6 +55,19 @@ export const useRealtimeStore = defineStore('realtime', () => {
       console.log('Message update event received:', data)
       messagesStore.handleMessageUpdate(data)
     })
+
+    websocketService.subscribe(`/user/queue/group-events`, async (data) => {
+      console.log('Group event received:', data)
+      await handleGroupEvent(data)
+    })
+  }
+
+  async function handleGroupEvent(data) {
+    const conversationsStore = useConversationsStore()
+
+    console.log('Handling group event:', data.eventType, 'for conversation:', data.conversationId)
+
+    await conversationsStore.fetchConversations()
   }
 
   function subscribeToConversation(conversationId) {
