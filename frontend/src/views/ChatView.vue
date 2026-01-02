@@ -155,8 +155,9 @@
           placeholder="Type a message..."
           ref="messageInput"
           @input="handleTyping"
+          :disabled="isSendingMessage"
         />
-        <button type="submit" :disabled="!newMessage.trim()">Send</button>
+        <button type="submit" :disabled="!newMessage.trim() || isSendingMessage">Send</button>
       </form>
     </div>
 
@@ -190,6 +191,7 @@ const messagesContainer = ref(null)
 const messageInput = ref(null)
 const editingMessageId = ref(null)
 const editContent = ref('')
+const originalEditContent = ref('')
 const replyingTo = ref(null)
 const fileInput = ref(null)
 const uploadingFile = ref(null)
@@ -198,6 +200,7 @@ const showReactionPicker = ref(null)
 const availableReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 const typingTimeout = ref(null)
 const isTyping = ref(false)
+const isSendingMessage = ref(false)
 
 const conversationName = computed(() => {
   const conversation = conversationsStore.activeConversation
@@ -273,12 +276,12 @@ watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
 
 watch(messages, async () => {
   await nextTick()
-  scrollToBottom()
+  scrollToBottomIfNearBottom()
 }, { deep: true })
 
 watch(typingUsersDisplay, async () => {
   await nextTick()
-  scrollToBottom()
+  scrollToBottomIfNearBottom()
 }, { deep: true })
 
 onMounted(async () => {
@@ -307,9 +310,10 @@ async function loadMessages() {
 
 async function sendMessageHandler() {
   const content = newMessage.value.trim()
-  if (!content) return
+  if (!content || isSendingMessage.value) return
 
   handleStopTyping()
+  isSendingMessage.value = true
 
   try {
     await messagesStore.sendMessage(
@@ -320,9 +324,11 @@ async function sendMessageHandler() {
     newMessage.value = ''
     cancelReply()
     await nextTick()
-    scrollToBottom()
+    scrollToBottomIfNearBottom()
   } catch (error) {
     console.error('Failed to send message:', error)
+  } finally {
+    isSendingMessage.value = false
   }
 }
 
@@ -330,6 +336,7 @@ function startEdit(message) {
   if (message.type !== 'TEXT' || isMessageDeleted(message)) return
   editingMessageId.value = message.id
   editContent.value = message.content
+  originalEditContent.value = message.content
 }
 
 async function saveEdit() {
@@ -338,24 +345,37 @@ async function saveEdit() {
     return
   }
 
+  const messageId = editingMessageId.value
+  const conversationId = conversationsStore.activeConversationId
+
   try {
     await messagesStore.editMessage(
-      editingMessageId.value,
-      conversationsStore.activeConversationId,
+      messageId,
+      conversationId,
       editContent.value
     )
     cancelEdit()
   } catch (error) {
     console.error('Failed to edit message:', error)
+    const messages = messagesStore.getMessages(conversationId)
+    const message = messages.find(m => m.id === messageId)
+    if (message && originalEditContent.value) {
+      message.content = originalEditContent.value
+    }
+    cancelEdit()
   }
 }
 
 function cancelEdit() {
   editingMessageId.value = null
   editContent.value = ''
+  originalEditContent.value = ''
 }
 
 async function handleDeleteMessage(messageId) {
+  const confirmed = confirm('Are you sure you want to delete this message?')
+  if (!confirmed) return
+
   try {
     await messagesStore.deleteMessage(
       messageId,
@@ -396,9 +416,24 @@ function isEdited(message) {
   return updated - created > 1000
 }
 
+function isNearBottom() {
+  if (!messagesContainer.value) return true
+  const threshold = 150
+  const scrollTop = messagesContainer.value.scrollTop
+  const scrollHeight = messagesContainer.value.scrollHeight
+  const clientHeight = messagesContainer.value.clientHeight
+  return scrollHeight - scrollTop - clientHeight < threshold
+}
+
 function scrollToBottom() {
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+function scrollToBottomIfNearBottom() {
+  if (isNearBottom()) {
+    scrollToBottom()
   }
 }
 
