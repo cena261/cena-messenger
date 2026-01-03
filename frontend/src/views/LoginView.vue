@@ -1,17 +1,36 @@
 <template>
   <div class="login-container">
-    <div class="login-box">
-      <h1>Chat App</h1>
+    <div class="login-card">
+      <div class="login-header">
+        <div class="app-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <path d="M9 10h6M9 14h4"/>
+          </svg>
+        </div>
+        <h1>{{ isForgotPassword ? 'Reset Password' : (isRegistering ? 'Create Account' : 'Welcome Back') }}</h1>
+        <p>{{ isForgotPassword ? 'Enter your email to reset password' : (isRegistering ? 'Sign up to start chatting' : 'Sign in to continue') }}</p>
+      </div>
 
-      <div v-if="error" class="error-message">
+      <div v-if="error" class="alert error">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
         {{ error }}
       </div>
 
-      <div v-if="successMessage" class="success-message">
+      <div v-if="successMessage" class="alert success">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
         {{ successMessage }}
       </div>
 
-      <form v-if="!isForgotPassword" @submit.prevent="handleSubmit">
+      <!-- Login/Register Form -->
+      <form v-if="!isForgotPassword" @submit.prevent="handleSubmit" class="form">
         <div class="form-group">
           <label for="username">Username</label>
           <input
@@ -20,6 +39,7 @@
             type="text"
             required
             autocomplete="username"
+            placeholder="Enter your username"
           />
         </div>
 
@@ -31,6 +51,7 @@
             type="password"
             required
             autocomplete="current-password"
+            placeholder="Enter your password"
           />
         </div>
 
@@ -42,6 +63,7 @@
             type="email"
             :required="isRegistering"
             autocomplete="email"
+            placeholder="Enter your email"
           />
         </div>
 
@@ -52,6 +74,7 @@
             v-model="displayName"
             type="text"
             :required="isRegistering"
+            placeholder="How should we call you?"
           />
         </div>
 
@@ -62,17 +85,32 @@
             v-model="phone"
             type="tel"
             autocomplete="tel"
+            placeholder="Your phone number"
           />
         </div>
 
-        <button type="submit" :disabled="isLoading">
-          {{ isLoading ? 'Loading...' : (isRegistering ? 'Register' : 'Login') }}
+        <button type="submit" :disabled="isLoading" class="btn-primary">
+          <span v-if="!isLoading">{{ isRegistering ? 'Create Account' : 'Sign In' }}</span>
+          <span v-else class="loading-spinner"></span>
+        </button>
+
+        <button type="button" @click="toggleForgotPassword" class="btn-text">
+          Forgot password?
+        </button>
+
+        <div class="divider">
+          <span>{{ isRegistering ? 'Already have an account?' : 'New here?' }}</span>
+        </div>
+
+        <button type="button" @click="isRegistering = !isRegistering" class="btn-secondary">
+          {{ isRegistering ? 'Sign In' : 'Create Account' }}
         </button>
       </form>
 
-      <form v-if="isForgotPassword && resetStep === 1" @submit.prevent="handleRequestReset">
+      <!-- Password Reset Form -->
+      <form v-if="isForgotPassword && resetStep === 1" @submit.prevent="handleRequestReset" class="form">
         <div class="form-group">
-          <label for="resetEmail">Email</label>
+          <label for="resetEmail">Email Address</label>
           <input
             id="resetEmail"
             v-model="resetEmail"
@@ -83,12 +121,17 @@
           />
         </div>
 
-        <button type="submit" :disabled="isLoading">
-          {{ isLoading ? 'Sending...' : 'Send Reset Code' }}
+        <button type="submit" :disabled="isLoading" class="btn-primary">
+          <span v-if="!isLoading">Send Reset Code</span>
+          <span v-else class="loading-spinner"></span>
+        </button>
+
+        <button type="button" @click="backToLogin" class="btn-text">
+          Back to Sign In
         </button>
       </form>
 
-      <form v-if="isForgotPassword && resetStep === 2" @submit.prevent="handleResetPassword">
+      <form v-if="isForgotPassword && resetStep === 2" @submit.prevent="handleResetPassword" class="form">
         <div class="form-group">
           <label for="resetCode">6-Digit Code</label>
           <input
@@ -114,28 +157,15 @@
           />
         </div>
 
-        <button type="submit" :disabled="isLoading">
-          {{ isLoading ? 'Resetting...' : 'Reset Password' }}
+        <button type="submit" :disabled="isLoading" class="btn-primary">
+          <span v-if="!isLoading">Reset Password</span>
+          <span v-else class="loading-spinner"></span>
+        </button>
+
+        <button type="button" @click="backToLogin" class="btn-text">
+          Back to Sign In
         </button>
       </form>
-
-      <div v-if="!isForgotPassword" class="toggle-mode">
-        <button type="button" @click="toggleForgotPassword">
-          Forgot password?
-        </button>
-      </div>
-
-      <div v-if="!isForgotPassword" class="toggle-mode">
-        <button type="button" @click="isRegistering = !isRegistering">
-          {{ isRegistering ? 'Already have an account? Login' : 'Need an account? Register' }}
-        </button>
-      </div>
-
-      <div v-if="isForgotPassword" class="toggle-mode">
-        <button type="button" @click="backToLogin">
-          Back to Login
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -252,109 +282,220 @@ function backToLogin() {
 
 <style scoped>
 .login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
   min-height: 100vh;
-  background-color: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #FAF8F5 0%, #F5F2EE 100%);
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
 }
 
-.login-box {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+.login-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
+  background: white;
+  border-radius: 20px;
+  padding: 48px 40px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
-h1 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
+.login-header {
   text-align: center;
-  color: #333;
+  margin-bottom: 32px;
 }
 
-.error-message {
-  background-color: #fee;
-  color: #c33;
-  padding: 0.75rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
+.app-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  background: var(--color-gradient-warm);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
 }
 
-.success-message {
-  background-color: #efe;
-  color: #3c3;
-  padding: 0.75rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
+.login-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+.login-header p {
+  font-size: 15px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.alert.error {
+  background: #FEF2F2;
+  color: var(--color-error);
+}
+
+.alert.success {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  font-weight: 500;
-  color: #555;
+.form-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
 }
 
-input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  box-sizing: border-box;
+.form-group input {
+  padding: 12px 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  background: var(--color-bg-primary);
 }
 
-input:focus {
+.form-group input:focus {
   outline: none;
-  border-color: #4CAF50;
+  border-color: var(--color-primary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(224, 120, 86, 0.1);
 }
 
-button[type="submit"] {
-  width: 100%;
-  padding: 0.75rem;
-  background-color: #4CAF50;
+.form-group input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.btn-primary {
+  padding: 14px 24px;
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 1rem;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  font-weight: 500;
+  transition: all 0.2s ease;
+  margin-top: 8px;
 }
 
-button[type="submit"]:hover:not(:disabled) {
-  background-color: #45a049;
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(224, 120, 86, 0.3);
 }
 
-button[type="submit"]:disabled {
-  background-color: #ccc;
+.btn-primary:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
-.toggle-mode {
-  margin-top: 1rem;
-  text-align: center;
+.loading-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-.toggle-mode button {
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.btn-text {
+  padding: 8px;
   background: none;
   border: none;
-  color: #4CAF50;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s ease;
   text-decoration: underline;
-  padding: 0;
-  font-size: 0.9rem;
 }
 
-.toggle-mode button:hover {
-  color: #45a049;
+.btn-text:hover {
+  color: var(--color-primary-dark);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 8px 0;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.divider span {
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.btn-secondary {
+  padding: 12px 24px;
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border: none;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--color-border);
+}
+
+/* CSS Variables */
+:root {
+  --color-primary: #E07856;
+  --color-primary-dark: #C96644;
+  --color-primary-light: #FFF3EF;
+
+  --color-bg-primary: #FAF8F5;
+  --color-bg-hover: #F5F2EE;
+
+  --color-text-primary: #2C2C2C;
+  --color-text-secondary: #6B6B6B;
+  --color-text-tertiary: #9B9B9B;
+
+  --color-border: #E8E4DF;
+  --color-error: #D64545;
+
+  --color-gradient-warm: linear-gradient(135deg, #E07856 0%, #C96644 100%);
 }
 </style>

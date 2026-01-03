@@ -1,162 +1,312 @@
 <template>
   <div v-if="!conversationsStore.activeConversationId" class="no-conversation">
-    <p>Select a conversation to start chatting</p>
+    <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      <path d="M9 10h6M9 14h4"/>
+    </svg>
+    <h2>Welcome to Chats</h2>
+    <p>Select a conversation to start messaging</p>
   </div>
 
   <div v-else class="chat-view">
+    <!-- Header -->
     <div class="chat-header">
-      <h3>{{ conversationName }}</h3>
+      <div class="header-info">
+        <div class="chat-avatar">
+          <div class="avatar-placeholder">{{ conversationName.charAt(0) }}</div>
+        </div>
+        <div class="chat-details">
+          <h2 class="chat-name">{{ conversationName }}</h2>
+          <p v-if="typingUsersDisplay.length > 0" class="chat-status typing">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span v-if="typingUsersDisplay.length === 1">
+              {{ typingUsersDisplay[0].displayName }} is typing
+            </span>
+            <span v-else>
+              {{ typingUsersDisplay.length }} people are typing
+            </span>
+          </p>
+        </div>
+      </div>
       <div class="header-actions">
         <button
           v-if="conversationsStore.activeConversation?.type === 'GROUP'"
           @click="openGroupManagement"
-          class="group-settings-btn"
+          class="header-btn"
+          title="Group Settings"
         >
-          Group Settings
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 1v6m0 6v6m6-10l-4.5 4.5m-3 3L6 23m5-11l6 6m-12 0l6-6"/>
+          </svg>
         </button>
         <button
           v-if="otherUserId && !blockingStore.isUserBlocked(otherUserId)"
           @click="handleBlockUser"
-          class="block-btn"
+          class="header-btn"
+          title="Block User"
         >
-          Block User
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+          </svg>
         </button>
         <button
           v-if="otherUserId && blockingStore.isUserBlocked(otherUserId)"
           @click="handleUnblockUser"
-          class="unblock-btn"
+          class="header-btn primary"
+          title="Unblock User"
         >
-          Unblock User
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
         </button>
       </div>
     </div>
 
+    <!-- Messages Container -->
     <div class="messages-container" ref="messagesContainer">
-      <div v-if="messagesStore.isLoading" class="loading">
-        Loading messages...
+      <div v-if="messagesStore.isLoading" class="messages-loading">
+        <div class="spinner"></div>
       </div>
 
-      <div v-else-if="messages.length === 0" class="no-messages">
-        No messages yet. Start the conversation!
+      <div v-else-if="messages.length === 0" class="messages-empty">
+        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <p>No messages yet. Start the conversation!</p>
       </div>
 
       <div v-else class="messages-list">
-        <div
-          v-for="message in messages"
-          :key="message.id"
-          class="message"
-          :class="{ 'own-message': message.senderId === authStore.user?.id }"
-        >
-          <div v-if="message.replyTo" class="message-reply-context">
-            Replying to {{ getReplyToUsername(message.replyTo) }}: {{ getReplyToPreview(message.replyTo) }}
-          </div>
+        <div v-for="(message, index) in messages" :key="message.id" class="message-wrapper">
+          <!-- Message Bubble -->
+          <div :class="['message', message.senderId === authStore.user?.id ? 'own' : 'other']">
+            <!-- Avatar for received messages -->
+            <div v-if="message.senderId !== authStore.user?.id && shouldShowAvatar(index)" class="message-avatar">
+              <div class="avatar-small">{{ getUserInitial(message.senderId) }}</div>
+            </div>
+            <div v-else-if="message.senderId !== authStore.user?.id" class="message-avatar-spacer"></div>
 
-          <div class="message-sender">{{ message.senderDisplayName || message.senderUsername }}</div>
+            <div class="message-content-wrapper">
+              <!-- Sender name for received messages in groups -->
+              <div
+                v-if="message.senderId !== authStore.user?.id && conversationsStore.activeConversation?.type === 'GROUP' && shouldShowAvatar(index)"
+                class="message-sender-name"
+              >
+                {{ message.senderDisplayName || message.senderUsername }}
+              </div>
 
-          <div v-if="editingMessageId === message.id" class="message-edit">
-            <input v-model="editContent" @keyup.enter="saveEdit" @keyup.escape="cancelEdit" />
-            <div class="edit-actions">
-              <button @click="saveEdit" class="save-btn">Save</button>
-              <button @click="cancelEdit" class="cancel-btn">Cancel</button>
-            </div>
-          </div>
+              <!-- Reply Context -->
+              <div v-if="message.replyTo" class="message-reply-context">
+                <div class="reply-bar"></div>
+                <div class="reply-content">
+                  <span class="reply-to">{{ getReplyToUsername(message.replyTo) }}</span>
+                  <span class="reply-preview">{{ getReplyToPreview(message.replyTo) }}</span>
+                </div>
+              </div>
 
-          <div v-else class="message-content">
-            <span v-if="isMessageDeleted(message)" class="deleted-message">This message was deleted</span>
-            <div v-else-if="message.type === 'IMAGE'" class="media-content">
-              <img :src="message.mediaUrl" :alt="message.mediaMetadata?.fileName" class="media-image" />
-            </div>
-            <div v-else-if="message.type === 'VIDEO'" class="media-content media-placeholder">
-              <div class="placeholder-icon">🎥</div>
-              <div class="placeholder-text">Video: {{ message.mediaMetadata?.fileName || 'video file' }}</div>
-              <a :href="message.mediaUrl" target="_blank" class="media-link">Download</a>
-            </div>
-            <div v-else-if="message.type === 'AUDIO'" class="media-content media-placeholder">
-              <div class="placeholder-icon">🎵</div>
-              <div class="placeholder-text">Audio: {{ message.mediaMetadata?.fileName || 'audio file' }}</div>
-              <a :href="message.mediaUrl" target="_blank" class="media-link">Download</a>
-            </div>
-            <div v-else-if="message.type === 'MEDIA'" class="media-content">
-              <a :href="message.mediaUrl" target="_blank" class="media-link">
-                {{ message.mediaMetadata?.fileName || 'Download file' }}
-              </a>
-            </div>
-            <span v-else>{{ message.content }}</span>
-            <span v-if="!isMessageDeleted(message) && isEdited(message)" class="edited-indicator">(edited)</span>
-          </div>
+              <!-- Edit Mode -->
+              <div v-if="editingMessageId === message.id" class="message-edit">
+                <input
+                  v-model="editContent"
+                  @keyup.enter="saveEdit"
+                  @keyup.escape="cancelEdit"
+                  placeholder="Edit message..."
+                  class="edit-input"
+                />
+                <div class="edit-actions">
+                  <button @click="saveEdit" class="edit-btn save">Save</button>
+                  <button @click="cancelEdit" class="edit-btn cancel">Cancel</button>
+                </div>
+              </div>
 
-          <div v-if="!isMessageDeleted(message) && message.reactions && Object.keys(message.reactions).length > 0" class="message-reactions">
-            <span
-              v-for="(emoji, userId) in message.reactions"
-              :key="userId"
-              class="reaction-item"
-              :class="{ 'own-reaction': userId === authStore.user?.id }"
-              @click="handleToggleReaction(message.id, emoji)"
-              :title="`${getUserDisplayName(userId)}`"
-            >
-              {{ emoji }}
-            </span>
-          </div>
+              <!-- Message Bubble -->
+              <div v-else :class="['message-bubble', message.senderId === authStore.user?.id ? 'sent' : 'received']">
+                <span v-if="isMessageDeleted(message)" class="deleted-text">This message was deleted</span>
 
-          <div class="message-footer">
-            <div class="message-time">{{ formatTime(message.createdAt) }}</div>
-            <div v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)" class="message-seen">
-              {{ formatSeenIndicator(getSeenByUsers(message)) }}
-            </div>
-            <div v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)" class="message-actions">
-              <button v-if="message.type === 'TEXT'" @click="startEdit(message)" class="action-btn">Edit</button>
-              <button @click="handleDeleteMessage(message.id)" class="action-btn">Delete</button>
-            </div>
-            <div v-if="!isMessageDeleted(message)" class="message-actions">
-              <button @click="startReply(message)" class="action-btn">Reply</button>
-              <button @click="toggleReactionPicker(message.id)" class="action-btn">React</button>
-            </div>
-          </div>
+                <div v-else-if="message.type === 'IMAGE'" class="media-content">
+                  <img :src="message.mediaUrl" :alt="message.mediaMetadata?.fileName" class="media-image" />
+                </div>
 
-          <div v-if="showReactionPicker === message.id" class="reaction-picker">
-            <span
-              v-for="emoji in availableReactions"
-              :key="emoji"
-              class="reaction-emoji"
-              @click="handleToggleReaction(message.id, emoji)"
-            >
-              {{ emoji }}
-            </span>
+                <div v-else-if="message.type === 'VIDEO' || message.type === 'AUDIO'" class="media-placeholder">
+                  <div class="media-icon">{{ message.type === 'VIDEO' ? '🎥' : '🎵' }}</div>
+                  <div class="media-info">
+                    <span class="media-name">{{ message.mediaMetadata?.fileName || message.type.toLowerCase() }}</span>
+                    <a :href="message.mediaUrl" target="_blank" class="media-download">Download</a>
+                  </div>
+                </div>
+
+                <div v-else-if="message.type === 'MEDIA'" class="media-placeholder">
+                  <a :href="message.mediaUrl" target="_blank" class="media-link">
+                    📎 {{ message.mediaMetadata?.fileName || 'Download file' }}
+                  </a>
+                </div>
+
+                <div v-else class="message-text">
+                  {{ message.content }}
+                  <span v-if="isEdited(message)" class="edited-badge">edited</span>
+                </div>
+
+                <!-- Reactions -->
+                <div v-if="!isMessageDeleted(message) && message.reactions && Object.keys(message.reactions).length > 0" class="message-reactions">
+                  <button
+                    v-for="(emoji, userId) in message.reactions"
+                    :key="userId"
+                    :class="['reaction-badge', { own: userId === authStore.user?.id }]"
+                    @click="handleToggleReaction(message.id, emoji)"
+                    :title="`${getUserDisplayName(userId)}`"
+                  >
+                    {{ emoji }}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Message Footer -->
+              <div class="message-footer">
+                <span class="message-time">{{ formatTime(message.createdAt) }}</span>
+
+                <!-- Seen indicator for own messages -->
+                <span
+                  v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)"
+                  class="message-seen"
+                >
+                  {{ formatSeenIndicator(getSeenByUsers(message)) }}
+                </span>
+
+                <!-- Actions -->
+                <div class="message-actions">
+                  <button
+                    v-if="!isMessageDeleted(message)"
+                    @click="startReply(message)"
+                    class="action-btn"
+                    title="Reply"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9 14L4 9l5-5"/>
+                      <path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+                    </svg>
+                  </button>
+
+                  <button
+                    v-if="!isMessageDeleted(message)"
+                    @click="toggleReactionPicker(message.id)"
+                    class="action-btn"
+                    title="React"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                      <line x1="9" y1="9" x2="9.01" y2="9"/>
+                      <line x1="15" y1="9" x2="15.01" y2="9"/>
+                    </svg>
+                  </button>
+
+                  <button
+                    v-if="message.senderId === authStore.user?.id && message.type === 'TEXT' && !isMessageDeleted(message)"
+                    @click="startEdit(message)"
+                    class="action-btn"
+                    title="Edit"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+
+                  <button
+                    v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)"
+                    @click="handleDeleteMessage(message.id)"
+                    class="action-btn delete"
+                    title="Delete"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Reaction Picker -->
+              <div v-if="showReactionPicker === message.id" class="reaction-picker">
+                <button
+                  v-for="emoji in availableReactions"
+                  :key="emoji"
+                  class="reaction-option"
+                  @click="handleToggleReaction(message.id, emoji)"
+                >
+                  {{ emoji }}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      <div v-show="typingUsersDisplay.length > 0" class="typing-indicator">
-        <span v-if="typingUsersDisplay.length === 1">
-          {{ typingUsersDisplay[0].displayName }} is typing...
-        </span>
-        <span v-else-if="typingUsersDisplay.length === 2">
-          {{ typingUsersDisplay[0].displayName }} and {{ typingUsersDisplay[1].displayName }} are typing...
-        </span>
-        <span v-else>
-          {{ typingUsersDisplay.length }} people are typing...
-        </span>
-      </div>
     </div>
 
-    <div class="message-input-container">
-      <div v-if="replyingTo" class="replying-to">
-        <span>Replying to {{ replyingTo.senderDisplayName || replyingTo.senderUsername }}: {{ replyingTo.content?.substring(0, 50) }}...</span>
-        <button @click="cancelReply" class="cancel-reply-btn">✕</button>
-      </div>
-      <div v-if="uploadingFile" class="uploading-indicator">
-        Uploading {{ uploadingFile.name }}...
-      </div>
-      <div v-if="sendError" class="error-message">
+    <!-- Input Area -->
+    <div class="input-container">
+      <!-- Error Messages -->
+      <div v-if="sendError" class="input-error">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
         {{ sendError }}
       </div>
-      <div v-if="editError" class="error-message">
+
+      <div v-if="editError" class="input-error">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
         {{ editError }}
       </div>
-      <div v-if="deleteError" class="error-message">
+
+      <div v-if="deleteError" class="input-error">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
         {{ deleteError }}
       </div>
-      <form @submit.prevent="sendMessageHandler">
+
+      <!-- Reply Preview -->
+      <div v-if="replyingTo" class="reply-preview">
+        <div class="reply-info">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 14L4 9l5-5"/>
+            <path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
+          </svg>
+          <div class="reply-details">
+            <span class="reply-to-name">{{ replyingTo.senderDisplayName || replyingTo.senderUsername }}</span>
+            <span class="reply-to-content">{{ replyingTo.content?.substring(0, 50) }}...</span>
+          </div>
+        </div>
+        <button @click="cancelReply" class="reply-cancel">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Upload Preview -->
+      <div v-if="uploadingFile" class="upload-preview">
+        <div class="upload-info">
+          <div class="upload-spinner"></div>
+          <span>Uploading {{ uploadingFile.name }}...</span>
+        </div>
+      </div>
+
+      <!-- Input Form -->
+      <form @submit.prevent="sendMessageHandler" class="input-form">
         <input
           type="file"
           ref="fileInput"
@@ -164,7 +314,19 @@
           style="display: none"
           accept="image/*,video/*,audio/*"
         />
-        <button type="button" @click="openFileDialog" class="attach-btn" :disabled="!authStore.isAuthenticated">📎</button>
+
+        <button
+          type="button"
+          @click="openFileDialog"
+          class="input-btn"
+          :disabled="!authStore.isAuthenticated"
+          title="Attach file"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+          </svg>
+        </button>
+
         <input
           v-model="newMessage"
           type="text"
@@ -172,11 +334,23 @@
           ref="messageInput"
           @input="handleTyping"
           :disabled="isSendingMessage || !authStore.isAuthenticated"
+          class="message-input"
         />
-        <button type="submit" :disabled="!newMessage.trim() || isSendingMessage || !authStore.isAuthenticated">Send</button>
+
+        <button
+          type="submit"
+          :disabled="!newMessage.trim() || isSendingMessage || !authStore.isAuthenticated"
+          class="send-btn"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
       </form>
     </div>
 
+    <!-- Group Management Modal -->
     <GroupManagementModal
       :isOpen="isGroupManagementOpen"
       :conversation="conversationsStore.activeConversation"
@@ -266,6 +440,22 @@ const typingUsersDisplay = computed(() => {
   })
 })
 
+function shouldShowAvatar(index) {
+  if (index === 0) return true
+  const prevMessage = messages.value[index - 1]
+  const currentMessage = messages.value[index]
+  return prevMessage.senderId !== currentMessage.senderId
+}
+
+function getUserInitial(userId) {
+  const conversation = conversationsStore.activeConversation
+  if (!conversation) return '?'
+
+  const member = conversation.members?.find(m => m.userId === userId)
+  const name = member?.displayName || member?.username || '?'
+  return name.charAt(0).toUpperCase()
+}
+
 function isMessageDeleted(message) {
   return message.isDeleted === true || message.deleted === true
 }
@@ -294,11 +484,9 @@ function formatSeenIndicator(seenByUsers) {
   if (!seenByUsers || seenByUsers.length === 0) return ''
 
   if (seenByUsers.length === 1) {
-    return `Seen by ${seenByUsers[0].displayName}`
-  } else if (seenByUsers.length === 2) {
-    return `Seen by ${seenByUsers[0].displayName} and ${seenByUsers[1].displayName}`
+    return `Seen`
   } else {
-    return `Seen by ${seenByUsers.length} people`
+    return `Seen by ${seenByUsers.length}`
   }
 }
 
@@ -497,7 +685,7 @@ function scrollToBottomIfNearBottom() {
 function formatTime(timestamp) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
 async function handleBlockUser() {
@@ -637,428 +825,710 @@ function handleStopTyping() {
 </script>
 
 <style scoped>
+/* Container */
 .no-conversation {
+  flex: 1;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-  height: 100%;
-  color: #666;
-  font-size: 1.125rem;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.no-conversation svg {
+  margin-bottom: 24px;
+  opacity: 0.2;
+}
+
+.no-conversation h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin: 0 0 8px 0;
+}
+
+.no-conversation p {
+  font-size: 15px;
+  margin: 0;
 }
 
 .chat-view {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
+  background: var(--color-bg-primary);
 }
 
+/* Header */
 .chat-header {
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
-  background-color: #f9f9f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 16px 24px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.chat-header h3 {
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-avatar .avatar-placeholder {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--color-gradient-warm);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chat-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary);
   margin: 0;
-  font-size: 1.25rem;
-  color: #333;
+}
+
+.chat-status {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin-top: 2px;
+}
+
+.chat-status.typing {
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.typing-dot {
+  width: 4px;
+  height: 4px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
-.group-settings-btn {
-  padding: 0.5rem 1rem;
-  background-color: #2196F3;
-  color: white;
+.header-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   border: none;
-  border-radius: 4px;
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
-.group-settings-btn:hover {
-  background-color: #1976D2;
+.header-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text-primary);
 }
 
-.block-btn {
-  padding: 0.5rem 1rem;
-  background-color: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
+.header-btn.primary {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
 }
 
-.block-btn:hover {
-  background-color: #d32f2f;
-}
-
-.unblock-btn {
-  padding: 0.5rem 1rem;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.unblock-btn:hover {
-  background-color: #45a049;
-}
-
+/* Messages Container */
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem;
-  background-color: #fafafa;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column-reverse;
 }
 
-.loading,
-.no-messages {
-  text-align: center;
-  color: #666;
-  padding: 2rem;
+.messages-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.messages-loading,
+.messages-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.messages-empty svg {
+  margin-bottom: 16px;
+  opacity: 0.2;
 }
 
 .messages-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 2px;
 }
 
+/* Message */
 .message {
   display: flex;
-  flex-direction: column;
-  max-width: 70%;
-  padding: 0.75rem;
-  border-radius: 8px;
-  background-color: white;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.message.own-message {
-  align-self: flex-end;
-  background-color: #e3f2fd;
+.message.own {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  flex-shrink: 0;
+}
+
+.avatar-small {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.message-avatar-spacer {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.message-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: 65%;
+  gap: 4px;
+}
+
+.message.own .message-content-wrapper {
+  align-items: flex-end;
+}
+
+.message-sender-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
 }
 
 .message-reply-context {
-  font-size: 0.75rem;
-  color: #666;
-  font-style: italic;
-  margin-bottom: 0.25rem;
-  padding: 0.25rem;
-  background-color: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-bg-hover);
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 4px;
 }
 
-.message-sender {
-  font-size: 0.75rem;
+.reply-bar {
+  width: 3px;
+  background: var(--color-primary);
+  border-radius: 2px;
+}
+
+.reply-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reply-to {
   font-weight: 600;
-  color: #666;
-  margin-bottom: 0.25rem;
+  color: var(--color-primary);
 }
 
-.message-content {
-  font-size: 1rem;
-  color: #333;
+.reply-preview {
+  color: var(--color-text-secondary);
+}
+
+/* Message Bubble */
+.message-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.5;
   word-wrap: break-word;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.deleted-message {
-  font-style: italic;
-  color: #999;
-}
-
-.edited-indicator {
-  font-size: 0.75rem;
-  color: #999;
-  font-style: italic;
-  margin-left: 0.5rem;
-}
-
-.message-edit {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.message-edit input {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.edit-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.save-btn,
-.cancel-btn {
-  padding: 0.25rem 0.75rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-
-.save-btn {
-  background-color: #4CAF50;
+.message-bubble.sent {
+  background: var(--color-primary);
   color: white;
+  border-bottom-right-radius: 4px;
 }
 
-.save-btn:hover {
-  background-color: #45a049;
+.message-bubble.received {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-bottom-left-radius: 4px;
 }
 
-.cancel-btn {
-  background-color: #f44336;
-  color: white;
-}
-
-.cancel-btn:hover {
-  background-color: #d32f2f;
-}
-
-.message-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-top: 0.25rem;
-}
-
-.message-time {
-  font-size: 0.75rem;
-  color: #999;
-}
-
-.message-seen {
-  font-size: 0.7rem;
-  color: #2196F3;
+.deleted-text {
   font-style: italic;
+  opacity: 0.6;
 }
 
-.message-actions {
-  display: flex;
-  gap: 0.5rem;
+.message-text {
+  position: relative;
 }
 
-.action-btn {
-  font-size: 0.75rem;
-  color: #2196F3;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
+.edited-badge {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 6px;
 }
 
-.action-btn:hover {
-  text-decoration: underline;
-}
-
-.message-input-container {
-  border-top: 1px solid #ddd;
-  background-color: white;
-}
-
-.replying-to {
-  padding: 0.5rem 1rem;
-  background-color: #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.875rem;
-  border-bottom: 1px solid #ddd;
-}
-
-.cancel-reply-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.25rem;
-  color: #666;
-  padding: 0;
-  margin-left: 0.5rem;
-}
-
-.cancel-reply-btn:hover {
-  color: #333;
-}
-
-.message-input-container form {
-  padding: 1rem;
-  display: flex;
-  gap: 0.5rem;
-}
-
-.message-input-container input {
-  flex: 1;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-}
-
-.message-input-container input:focus {
-  outline: none;
-  border-color: #4CAF50;
-}
-
-.message-input-container button[type="submit"] {
-  padding: 0.75rem 1.5rem;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-}
-
-.message-input-container button[type="submit"]:hover:not(:disabled) {
-  background-color: #45a049;
-}
-
-.message-input-container button[type="submit"]:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
+/* Media */
 .media-content {
-  margin-top: 0.5rem;
+  margin: -4px;
 }
 
 .media-image {
-  max-width: 300px;
-  max-height: 300px;
-  border-radius: 8px;
+  max-width: 320px;
+  max-height: 320px;
+  border-radius: 12px;
+  display: block;
   cursor: pointer;
 }
 
 .media-placeholder {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 1rem;
-  background-color: #f5f5f5;
-  border-radius: 8px;
-  border: 1px solid #ddd;
+  gap: 12px;
+  padding: 12px;
+  background: var(--color-bg-hover);
+  border-radius: 12px;
 }
 
-.placeholder-icon {
-  font-size: 2rem;
+.media-icon {
+  font-size: 32px;
 }
 
-.placeholder-text {
-  font-size: 0.875rem;
-  color: #666;
-  text-align: center;
+.media-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.media-link {
-  color: #2196F3;
-  text-decoration: none;
+.media-name {
+  font-size: 14px;
   font-weight: 500;
 }
 
+.media-download,
+.media-link {
+  font-size: 13px;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.media-download:hover,
 .media-link:hover {
   text-decoration: underline;
 }
 
-.attach-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  padding: 0.5rem;
-}
-
-.attach-btn:hover {
-  opacity: 0.7;
-}
-
-.uploading-indicator {
-  padding: 0.5rem 1rem;
-  background-color: #e3f2fd;
-  border-bottom: 1px solid #ddd;
-  font-size: 0.875rem;
-  color: #666;
-}
-
-.error-message {
-  padding: 0.5rem 1rem;
-  background-color: #ffebee;
-  border-bottom: 1px solid #ef5350;
-  font-size: 0.875rem;
-  color: #c62828;
-}
-
-.typing-indicator {
-  padding: 0.75rem 1rem;
-  background-color: #f5f5f5;
-  border-top: 1px solid #ddd;
-  font-size: 0.875rem;
-  color: #666;
-  font-style: italic;
-}
-
+/* Reactions */
 .message-reactions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  margin-top: 0.5rem;
+  gap: 4px;
+  margin-top: 4px;
 }
 
-.reaction-item {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.5rem;
-  background-color: #f0f0f0;
+.reaction-badge {
+  min-width: 32px;
+  height: 24px;
+  padding: 0 8px;
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 14px;
   cursor: pointer;
-  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
-.reaction-item:hover {
-  background-color: #e0e0e0;
+.reaction-badge:hover {
+  background: var(--color-border);
+  transform: scale(1.1);
 }
 
-.reaction-item.own-reaction {
-  background-color: #d4edda;
-  border: 1px solid #4CAF50;
+.reaction-badge.own {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
+/* Message Footer */
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.message-time {
+  flex-shrink: 0;
+}
+
+.message-seen {
+  font-size: 11px;
+  color: var(--color-primary);
+}
+
+.message-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.action-btn.delete:hover {
+  background: var(--color-error);
+  color: white;
+}
+
+/* Reaction Picker */
 .reaction-picker {
   display: flex;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  background-color: #fff;
-  border: 1px solid #ddd;
+  gap: 6px;
+  padding: 8px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-top: 4px;
+}
+
+.reaction-option {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
   border-radius: 8px;
-  margin-top: 0.5rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.reaction-emoji {
-  font-size: 1.5rem;
+  font-size: 20px;
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
-.reaction-emoji:hover {
-  background-color: #f0f0f0;
+.reaction-option:hover {
+  background: var(--color-bg-hover);
+  transform: scale(1.2);
+}
+
+/* Edit Mode */
+.message-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.edit-input {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 15px;
+  outline: none;
+}
+
+.edit-input:focus {
+  border-color: var(--color-primary);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-btn.save {
+  background: var(--color-primary);
+  color: white;
+}
+
+.edit-btn.save:hover {
+  background: var(--color-primary-dark);
+}
+
+.edit-btn.cancel {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.edit-btn.cancel:hover {
+  background: var(--color-border);
+}
+
+/* Input Container */
+.input-container {
+  padding: 16px 24px;
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+}
+
+.input-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #FEF2F2;
+  color: var(--color-error);
+  border-radius: 10px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.reply-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--color-bg-hover);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.reply-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-text-secondary);
+}
+
+.reply-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reply-to-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.reply-to-content {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.reply-cancel {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.reply-cancel:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.upload-preview {
+  padding: 10px 14px;
+  background: var(--color-primary-light);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+
+.upload-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-primary-dark);
+  font-size: 14px;
+}
+
+.upload-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-primary-light);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Input Form */
+.input-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: none;
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.input-btn:hover:not(:disabled) {
+  background: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.input-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.message-input {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  font-size: 15px;
+  background: var(--color-bg-primary);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.message-input:focus {
+  border-color: var(--color-primary);
+  background: var(--color-bg-secondary);
+}
+
+.message-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: none;
+  background: var(--color-primary);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  transform: scale(1.05);
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>
