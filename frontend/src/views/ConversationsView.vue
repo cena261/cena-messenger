@@ -1,33 +1,59 @@
 <template>
   <div class="conversations-container">
-    <div class="conversations-list">
-      <div class="list-header">
-        <h2>Conversations</h2>
+    <!-- Sidebar -->
+    <div class="conversations-sidebar">
+      <div class="sidebar-header">
+        <h1 class="app-title">Chats</h1>
         <div class="header-actions">
-          <button @click="openSearchModal" class="search-btn">🔍 Search</button>
-          <button @click="openModal" class="new-chat-btn">New Chat</button>
-          <button @click="openBlockedUsersModal" class="blocked-users-btn">Blocked</button>
-          <button @click="handleLogout" class="logout-btn">Logout</button>
+          <button @click="openProfileModal" class="icon-btn" title="Profile Settings">
+            <div v-if="authStore.user?.avatarUrl" class="header-avatar">
+              <img :src="authStore.user.avatarUrl" :alt="authStore.user.displayName || authStore.user.username" />
+            </div>
+            <div v-else class="header-avatar-placeholder">
+              {{ getHeaderInitial() }}
+            </div>
+          </button>
+          <button @click="openSearchModal" class="icon-btn" title="Search">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+          </button>
+          <button @click="openModal" class="icon-btn primary" title="New Chat">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
         </div>
       </div>
 
-      <div v-if="conversationsStore.isLoading" class="loading">
-        Loading conversations...
+      <div class="sidebar-tabs">
+        <button class="tab active">All</button>
+        <button @click="openBlockedUsersModal" class="tab">Blocked</button>
       </div>
 
-      <div v-else-if="conversationsStore.error" class="error">
-        {{ conversationsStore.error }}
+      <div v-if="conversationsStore.isLoading" class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading conversations...</p>
       </div>
 
-      <div v-else-if="conversationsStore.conversations.length === 0" class="empty">
-        No conversations yet
+      <div v-else-if="conversationsStore.error" class="error-state">
+        <p>{{ conversationsStore.error }}</p>
       </div>
 
-      <div v-else class="conversation-items">
+      <div v-else-if="conversationsStore.conversations.length === 0" class="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <p>No conversations yet</p>
+        <button @click="openModal" class="btn-primary">Start chatting</button>
+      </div>
+
+      <div v-else class="conversations-list">
         <div
           v-for="conversation in conversationsStore.conversations"
           :key="conversation.id"
-          :class="['conversation-item', { active: conversation.id === conversationsStore.activeConversationId }]"
+          :class="['conversation-card', { active: conversation.id === conversationsStore.activeConversationId }]"
           @click="handleSelectConversation(conversation.id)"
         >
           <div class="conversation-avatar">
@@ -39,20 +65,28 @@
             <div v-else class="avatar-placeholder">
               {{ getConversationInitial(conversation) }}
             </div>
+            <div v-if="conversation.type === 'GROUP'" class="group-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
           </div>
 
-          <div class="conversation-info">
+          <div class="conversation-content">
             <div class="conversation-header">
-              <span class="conversation-name">{{ getConversationDisplayName(conversation) }}</span>
+              <h3 class="conversation-name">{{ getConversationDisplayName(conversation) }}</h3>
               <span v-if="conversation.lastMessageAt" class="conversation-time">
                 {{ formatTime(conversation.lastMessageAt) }}
               </span>
             </div>
 
-            <div class="conversation-preview">
-              <span class="preview-text">{{ getLastMessagePreview(conversation) }}</span>
+            <div class="conversation-footer">
+              <p class="conversation-preview">{{ getLastMessagePreview(conversation) }}</p>
               <span v-if="conversation.unreadCount > 0" class="unread-badge">
-                {{ conversation.unreadCount }}
+                {{ conversation.unreadCount > 99 ? '99+' : conversation.unreadCount }}
               </span>
             </div>
           </div>
@@ -60,9 +94,16 @@
       </div>
     </div>
 
-    <div class="conversation-detail">
+    <!-- Main Chat Area -->
+    <div class="chat-main">
       <ChatView />
     </div>
+
+    <!-- Modals -->
+    <ProfileModal
+      :isOpen="isProfileModalOpen"
+      @close="closeProfileModal"
+    />
 
     <NewConversationModal
       :isOpen="isModalOpen"
@@ -92,6 +133,7 @@ import { useConversationsStore } from '../stores/conversations'
 import { useBlockingStore } from '../stores/blocking'
 import websocketService from '../services/websocket'
 import ChatView from './ChatView.vue'
+import ProfileModal from '../components/ProfileModal.vue'
 import NewConversationModal from '../components/NewConversationModal.vue'
 import BlockedUsersModal from '../components/BlockedUsersModal.vue'
 import SearchModal from '../components/SearchModal.vue'
@@ -101,6 +143,7 @@ const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
 const blockingStore = useBlockingStore()
 
+const isProfileModalOpen = ref(false)
 const isModalOpen = ref(false)
 const isBlockedUsersModalOpen = ref(false)
 const isSearchModalOpen = ref(false)
@@ -133,8 +176,13 @@ function formatTime(timestamp) {
   const now = new Date()
   const diffInHours = (now - date) / (1000 * 60 * 60)
 
-  if (diffInHours < 24) {
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  if (diffInHours < 1) {
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60))
+    return diffInMinutes < 1 ? 'Just now' : `${diffInMinutes}m ago`
+  } else if (diffInHours < 24) {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  } else if (diffInHours < 48) {
+    return 'Yesterday'
   } else {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
@@ -147,6 +195,21 @@ async function handleSelectConversation(conversationId) {
 async function handleLogout() {
   await authStore.logout()
   router.push('/login')
+}
+
+function getHeaderInitial() {
+  const user = authStore.user
+  if (!user) return 'U'
+  const name = user.displayName || user.username || 'U'
+  return name.charAt(0).toUpperCase()
+}
+
+function openProfileModal() {
+  isProfileModalOpen.value = true
+}
+
+function closeProfileModal() {
+  isProfileModalOpen.value = false
 }
 
 function openModal() {
@@ -218,151 +281,254 @@ onUnmounted(() => {
 .conversations-container {
   display: flex;
   height: 100vh;
+  background: var(--color-bg-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
   overflow: hidden;
 }
 
-.conversations-list {
-  width: 350px;
-  border-right: 1px solid #ddd;
+/* Sidebar */
+.conversations-sidebar {
+  width: 360px;
   display: flex;
   flex-direction: column;
-  background-color: white;
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
 }
 
-.list-header {
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
+.sidebar-header {
+  padding: 24px 20px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.list-header h2 {
+.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary);
   margin: 0;
-  font-size: 1.25rem;
-  color: #333;
+  letter-spacing: -0.5px;
 }
 
 .header-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 8px;
 }
 
-.search-btn {
-  padding: 0.5rem 1rem;
-  background-color: #2196F3;
-  color: white;
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
+  background: transparent;
+  color: var(--color-text-secondary);
   cursor: pointer;
-}
-
-.search-btn:hover {
-  background-color: #1976D2;
-}
-
-.new-chat-btn {
-  padding: 0.5rem 1rem;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.new-chat-btn:hover {
-  background-color: #45a049;
-}
-
-.blocked-users-btn {
-  padding: 0.5rem 1rem;
-  background-color: #FF9800;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.blocked-users-btn:hover {
-  background-color: #F57C00;
-}
-
-.logout-btn {
-  padding: 0.5rem 1rem;
-  background-color: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
-.logout-btn:hover {
-  background-color: #d32f2f;
-}
-
-.loading,
-.error,
-.empty {
-  padding: 2rem;
-  text-align: center;
-  color: #666;
-}
-
-.error {
-  color: #c33;
-}
-
-.conversation-items {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.conversation-item {
   display: flex;
-  padding: 1rem;
-  border-bottom: 1px solid #f0f0f0;
-  cursor: pointer;
-  transition: background-color 0.2s;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
 }
 
-.conversation-item:hover {
-  background-color: #f5f5f5;
+.icon-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
-.conversation-item.active {
-  background-color: #e3f2fd;
+.icon-btn.primary {
+  background: var(--color-primary);
+  color: white;
 }
 
-.conversation-avatar {
-  flex-shrink: 0;
-  margin-right: 1rem;
+.icon-btn.primary:hover {
+  background: var(--color-primary-dark);
+  transform: scale(1.05);
 }
 
-.conversation-avatar img {
-  width: 50px;
-  height: 50px;
+.header-avatar,
+.header-avatar-placeholder {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
+  overflow: hidden;
+}
+
+.header-avatar img {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
-.avatar-placeholder {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: #4CAF50;
+.header-avatar-placeholder {
+  background: var(--color-gradient-warm);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.conversation-info {
+.sidebar-tabs {
+  display: flex;
+  padding: 12px 20px;
+  gap: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.tab.active {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+.tab:hover:not(.active) {
+  background: var(--color-bg-hover);
+}
+
+/* States */
+.loading-state,
+.error-state,
+.empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error-state {
+  color: var(--color-error);
+}
+
+.empty-state svg {
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+  font-size: 15px;
+}
+
+.btn-primary {
+  padding: 10px 24px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-dark);
+  transform: translateY(-1px);
+}
+
+/* Conversations List */
+.conversations-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.conversations-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.conversations-list::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.conversation-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+}
+
+.conversation-card:hover {
+  background: var(--color-bg-hover);
+}
+
+.conversation-card.active {
+  background: var(--color-primary-light);
+}
+
+.conversation-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.conversation-avatar img,
+.avatar-placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  background: var(--color-gradient-warm);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.group-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 20px;
+  height: 20px;
+  background: var(--color-accent);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: 2px solid var(--color-bg-secondary);
+}
+
+.conversation-content {
   flex: 1;
   min-width: 0;
 }
@@ -371,33 +537,37 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 0.25rem;
+  margin-bottom: 6px;
 }
 
 .conversation-name {
-  font-weight: 500;
-  color: #333;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .conversation-time {
-  font-size: 0.75rem;
-  color: #999;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
-  margin-left: 0.5rem;
+  margin-left: 8px;
 }
 
-.conversation-preview {
+.conversation-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
-.preview-text {
-  font-size: 0.875rem;
-  color: #666;
+.conversation-preview {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -405,20 +575,49 @@ onUnmounted(() => {
 }
 
 .unread-badge {
-  background-color: #4CAF50;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--color-primary);
   color: white;
-  border-radius: 12px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  margin-left: 0.5rem;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.conversation-detail {
+/* Main Chat Area */
+.chat-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--color-bg-primary);
+}
+
+/* CSS Variables */
+:root {
+  --color-primary: #E07856;
+  --color-primary-dark: #C96644;
+  --color-primary-light: #FFF3EF;
+
+  --color-accent: #7C9885;
+  --color-accent-light: #EFF4F0;
+
+  --color-bg-primary: #FAF8F5;
+  --color-bg-secondary: #FFFFFF;
+  --color-bg-hover: #F5F2EE;
+
+  --color-text-primary: #2C2C2C;
+  --color-text-secondary: #6B6B6B;
+  --color-text-tertiary: #9B9B9B;
+
+  --color-border: #E8E4DF;
+  --color-error: #D64545;
+
+  --color-gradient-warm: linear-gradient(135deg, #E07856 0%, #C96644 100%);
 }
 </style>
