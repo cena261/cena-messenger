@@ -8,7 +8,8 @@
 
       <div class="modal-body">
         <div v-if="blockingStore.isLoading" class="loading">
-          Loading blocked users...
+          <div class="spinner"></div>
+          <p>Loading blocked users...</p>
         </div>
 
         <div v-else-if="blockingStore.error" class="error">
@@ -16,7 +17,11 @@
         </div>
 
         <div v-else-if="blockingStore.blockedUsers.length === 0" class="empty">
-          No blocked users
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+          </svg>
+          <p>No blocked users</p>
         </div>
 
         <div v-else class="blocked-users-list">
@@ -110,18 +115,19 @@ function formatDate(timestamp) {
 }
 
 .modal-content {
-  background: white;
-  border-radius: 8px;
+  background: #FFFFFF;
+  border-radius: 20px;
   width: 90%;
   max-width: 500px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 
 .modal-header {
-  padding: 1rem;
-  border-bottom: 1px solid #ddd;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -129,30 +135,33 @@ function formatDate(timestamp) {
 
 .modal-header h2 {
   margin: 0;
-  font-size: 1.25rem;
-  color: #333;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 28px;
   cursor: pointer;
-  color: #666;
+  color: var(--color-text-tertiary);
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.2s ease;
 }
 
 .close-btn:hover {
-  color: #333;
+  color: var(--color-text-primary);
 }
 
 .modal-body {
-  padding: 1rem;
+  padding: 24px;
   overflow-y: auto;
   flex: 1;
 }
@@ -160,28 +169,67 @@ function formatDate(timestamp) {
 .loading,
 .error,
 .empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: 2rem;
-  color: #666;
+  padding: 48px 24px;
+  color: var(--color-text-secondary);
+}
+
+.loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading p {
+  margin: 0;
+  font-size: 14px;
 }
 
 .error {
-  color: #c33;
+  color: var(--color-error);
+}
+
+.empty svg {
+  margin-bottom: 16px;
+  opacity: 0.3;
+  color: var(--color-text-tertiary);
+}
+
+.empty p {
+  margin: 0;
+  font-size: 15px;
 }
 
 .blocked-users-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 12px;
 }
 
 .blocked-user-item {
   display: flex;
   align-items: center;
-  padding: 1rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  gap: 1rem;
+  padding: 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 16px;
+  gap: 12px;
+  transition: all 0.2s ease;
+}
+
+.blocked-user-item:hover {
+  background: var(--color-bg-hover);
 }
 
 .user-avatar {
@@ -189,23 +237,23 @@ function formatDate(timestamp) {
 }
 
 .user-avatar img {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
   object-fit: cover;
 }
 
 .avatar-placeholder {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background-color: #999;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--color-gradient-warm);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
-  font-weight: 500;
+  font-size: 20px;
+  font-weight: 600;
 }
 
 .user-info {
@@ -214,34 +262,58 @@ function formatDate(timestamp) {
 }
 
 .user-name {
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 0.25rem;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--color-text-primary);
+  margin-bottom: 4px;
 }
 
 .user-username {
-  font-size: 0.875rem;
-  color: #666;
-  margin-bottom: 0.25rem;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
 }
 
 .blocked-at {
-  font-size: 0.75rem;
-  color: #999;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
 }
 
 .unblock-btn {
-  padding: 0.5rem 1rem;
-  background-color: #4CAF50;
+  padding: 10px 20px;
+  background-color: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: 14px;
+  font-weight: 600;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
 .unblock-btn:hover {
-  background-color: #45a049;
+  background-color: var(--color-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(224, 120, 86, 0.3);
+}
+
+/* CSS Variables */
+:root {
+  --color-primary: #E07856;
+  --color-primary-dark: #C96644;
+  --color-primary-light: #FFF3EF;
+
+  --color-bg-primary: #FAF8F5;
+  --color-bg-hover: #F5F2EE;
+
+  --color-text-primary: #2C2C2C;
+  --color-text-secondary: #6B6B6B;
+  --color-text-tertiary: #9B9B9B;
+
+  --color-border: #E8E4DF;
+  --color-error: #D64545;
+
+  --color-gradient-warm: linear-gradient(135deg, #E07856 0%, #C96644 100%);
 }
 </style>
