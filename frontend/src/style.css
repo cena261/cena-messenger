@@ -12,13 +12,13 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
-  color: #333;
+  color: #111318;
   background-color: #fff;
 }
 
@@ -33,4 +33,35 @@ button {
 input,
 textarea {
   font-family: inherit;
+}
+
+:root {
+  --color-primary: #135bec;
+  --color-primary-dark: #0f4bc4;
+  --color-primary-light: rgba(19, 91, 236, 0.1);
+  
+  --color-background-light: #f6f6f8;
+  --color-background-dark: #101622;
+  
+  --color-surface-light: #ffffff;
+  --color-surface-dark: #1a2230;
+  
+  --color-text-main: #111318;
+  --color-text-sub: #616f89;
+  --color-text-white: #ffffff;
+  
+  --color-border-light: #dbdfe6;
+  --color-border-dark: #2a3441;
+  
+  --color-error: #dc2626;
+  --color-success: #16a34a;
+  
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --shadow-primary: 0 4px 12px rgba(19, 91, 236, 0.3);
 }
