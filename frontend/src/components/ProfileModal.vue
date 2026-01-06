@@ -247,8 +247,6 @@ async function handleSave() {
 }
 
 async function handleLogout() {
-  if (!confirm('Bạn có chắc chắn muốn đăng xuất?')) return
-  
   try {
     await authStore.logout()
     emit('close')

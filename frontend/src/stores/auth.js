@@ -26,7 +26,13 @@ export const useAuthStore = defineStore('auth', () => {
 
       return userData
     } catch (err) {
-      error.value = err.response?.data?.message || 'Login failed'
+      const errorMsg = err.response?.data?.message || 'Tài khoản hoặc mật khẩu không đúng'
+      // Override backend error messages with Vietnamese
+      if (errorMsg === 'Invalid username or password' || errorMsg === 'Authentication failed') {
+        error.value = 'Tài khoản hoặc mật khẩu không đúng'
+      } else {
+        error.value = errorMsg
+      }
       throw err
     } finally {
       isLoading.value = false
@@ -49,7 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
 
       return userData
     } catch (err) {
-      error.value = err.response?.data?.message || 'Registration failed'
+      error.value = err.response?.data?.message || 'Đăng ký thất bại'
       throw err
     } finally {
       isLoading.value = false
@@ -82,7 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
       isAuthenticated.value = true
       return response.data
     } catch (err) {
-      error.value = err.response?.data?.message || 'Failed to fetch user'
+      error.value = err.response?.data?.message || 'Không thể tải thông tin người dùng'
       clearAccessToken()
       user.value = null
       isAuthenticated.value = false
