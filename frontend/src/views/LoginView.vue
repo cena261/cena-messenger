@@ -351,7 +351,7 @@ async function handleSubmit() {
     realtimeStore.initializeSubscriptions()
     router.push('/conversations')
   } catch (err) {
-    error.value = err.response?.data?.message || 'Authentication failed'
+    error.value = err.response?.data?.message || 'Tài khoản hoặc mật khẩu không đúng'
   } finally {
     isLoading.value = false
   }
@@ -364,10 +364,10 @@ async function handleRequestReset() {
 
   try {
     await authApi.requestPasswordReset(resetEmail.value)
-    successMessage.value = 'Reset code sent to your email'
+    successMessage.value = 'Mã xác nhận đã được gửi đến email của bạn'
     resetStep.value = 2
   } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to send reset code'
+    error.value = err.response?.data?.message || 'Không thể gửi mã xác nhận'
   } finally {
     isLoading.value = false
   }
@@ -380,13 +380,13 @@ async function handleResetPassword() {
 
   try {
     await authApi.resetPassword(resetEmail.value, resetCode.value, newPassword.value)
-    successMessage.value = 'Password reset successfully! You can now login.'
+    successMessage.value = 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay.'
 
     setTimeout(() => {
       backToLogin()
     }, 2000)
   } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to reset password'
+    error.value = err.response?.data?.message || 'Không thể đặt lại mật khẩu'
   } finally {
     isLoading.value = false
   }
@@ -644,8 +644,8 @@ function backToLogin() {
 
 .form-input {
   width: 100%;
-  padding: 12px 16px;
-  border: 1.5px solid var(--color-border-light);
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: 12px;
   font-size: 15px;
   color: var(--color-text-main);
