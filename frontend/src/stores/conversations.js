@@ -120,6 +120,10 @@ export const useConversationsStore = defineStore('conversations', () => {
     }
   }
 
+  function clearActiveConversation() {
+    activeConversationId.value = null
+  }
+
   return {
     conversations,
     activeConversationId,
@@ -130,6 +134,7 @@ export const useConversationsStore = defineStore('conversations', () => {
     createDirectConversation,
     createGroupConversation,
     selectConversation,
+    clearActiveConversation,
     updateConversationUnreadCount,
     handleSeenEvent,
     updateConversationLastMessage

@@ -87,12 +87,23 @@ export const useRealtimeStore = defineStore('realtime', () => {
       return
     }
 
-    const unsubscribeFn = websocketService.subscribe(destination, (message) => {
+    const unsubscribeFn = websocketService.subscribe(destination, async (message) => {
       console.log('Message received via WebSocket:', message)
       messagesStore.addMessage(conversationId, message)
 
       const conversationsStore = useConversationsStore()
       conversationsStore.updateConversationLastMessage(conversationId, message)
+
+      const authStore = useAuthStore()
+      if (message.senderId !== authStore.user?.id && conversationsStore.activeConversationId === conversationId) {
+        try {
+          const conversationsApi = await import('../api/conversations')
+          await conversationsApi.markConversationAsRead(conversationId)
+          console.log('Auto-marked conversation as read:', conversationId)
+        } catch (error) {
+          console.error('Failed to auto-mark conversation as read:', error)
+        }
+      }
     })
 
     subscriptions.value.push({ conversationId, destination, unsubscribe: unsubscribeFn })

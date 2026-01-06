@@ -48,3 +48,8 @@ export async function createMediaMessage(conversationId, fileKey, type, mediaMet
 
   return apiResponse
 }
+
+export async function getPresignedUrl(conversationId, fileName, fileSize, mimeType) {
+  const response = await requestPresignedUrl(conversationId, fileName, fileSize, mimeType)
+  return response.data
+}
