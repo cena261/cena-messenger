@@ -1,9 +1,11 @@
 <template>
-  <div v-if="isOpen" class="modal-overlay" @click="handleClose">
+  <div v-if="isOpen" class="modal-overlay" @click="handleOverlayClick">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
-        <h2>Profile Settings</h2>
-        <button @click="handleClose" class="close-btn">✕</button>
+        <h2>Cài đặt hồ sơ</h2>
+        <button class="close-btn" @click="handleClose">
+          <X :size="24" />
+        </button>
       </div>
 
       <div class="modal-body">
@@ -17,10 +19,10 @@
 
         <div class="profile-avatar-section">
           <div class="avatar-container">
-            <div v-if="previewAvatarUrl || currentUser?.avatarUrl" class="avatar-large">
+            <div v-if="previewAvatarUrl || currentUser?.avatarUrl" class="avatar-large-img">
               <img :src="previewAvatarUrl || currentUser?.avatarUrl" :alt="currentUser?.displayName || currentUser?.username" />
             </div>
-            <div v-else class="avatar-large avatar-placeholder">
+            <div v-else class="avatar-large">
               {{ getInitial() }}
             </div>
             <div v-if="isUploadingAvatar" class="avatar-uploading-overlay">
@@ -37,7 +39,7 @@
                 :disabled="isUploadingAvatar || isUpdating"
                 style="display: none"
               />
-              {{ isUploadingAvatar ? 'Uploading...' : 'Change Avatar' }}
+              {{ isUploadingAvatar ? 'Đang tải lên...' : 'Thay đổi avatar' }}
             </label>
             <button
               v-if="previewAvatarUrl || currentUser?.avatarUrl"
@@ -45,49 +47,55 @@
               :disabled="isUploadingAvatar || isUpdating"
               class="remove-avatar-btn"
             >
-              Remove
+              Xóa
             </button>
           </div>
-          <p class="avatar-hint">Max 5MB. Supported: JPG, PNG, GIF, WebP</p>
+          <p class="avatar-hint">Tối đa 5MB. Hỗ trợ: JPG, PNG, GIF, WebP</p>
         </div>
 
         <div class="profile-fields">
           <div class="form-group">
-            <label>Username</label>
-            <input type="text" :value="currentUser?.username" disabled class="read-only-input" />
-            <span class="field-hint">Cannot be changed</span>
+            <label>Tên người dùng</label>
+            <input type="text" :value="currentUser?.username" disabled class="form-input read-only" />
+            <span class="field-hint">Không thể thay đổi</span>
           </div>
 
           <div class="form-group">
             <label>Email</label>
-            <input type="email" :value="currentUser?.email" disabled class="read-only-input" />
-            <span class="field-hint">Cannot be changed</span>
+            <input type="email" :value="currentUser?.email" disabled class="form-input read-only" />
+            <span class="field-hint">Không thể thay đổi</span>
           </div>
 
           <div class="form-group">
-            <label>Display Name</label>
+            <label>Tên hiển thị</label>
             <input
               type="text"
               v-model="editDisplayName"
               :disabled="isUpdating || isUploadingAvatar"
-              placeholder="Enter your display name"
+              placeholder="Nhập tên hiển thị của bạn"
               maxlength="50"
+              class="form-input"
             />
-            <span class="field-hint">How others see you in the app</span>
+            <span class="field-hint">Cách người khác thấy bạn trong ứng dụng</span>
           </div>
         </div>
       </div>
 
       <div class="modal-footer">
+        <button @click="handleLogout" :disabled="isUpdating || isUploadingAvatar" class="logout-btn">
+          <LogOut :size="18" />
+          Đăng xuất
+        </button>
+        <div class="footer-spacer"></div>
         <button @click="handleClose" :disabled="isUpdating || isUploadingAvatar" class="cancel-btn">
-          Cancel
+          Hủy
         </button>
         <button
           @click="handleSave"
           :disabled="!hasChanges || isUpdating || isUploadingAvatar"
           class="save-btn"
         >
-          {{ isUpdating ? 'Saving...' : 'Save Changes' }}
+          {{ isUpdating ? 'Đang lưu...' : 'Lưu thay đổi' }}
         </button>
       </div>
     </div>
@@ -95,9 +103,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import * as usersApi from '../api/users'
+import { LogOut, X } from 'lucide-vue-next'
 
 const props = defineProps({
   isOpen: Boolean
@@ -105,6 +115,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
+const router = useRouter()
 const authStore = useAuthStore()
 
 const currentUser = computed(() => authStore.user)
@@ -156,14 +167,14 @@ async function handleAvatarSelect(event) {
   successMessage.value = null
 
   if (file.size > 5 * 1024 * 1024) {
-    error.value = 'File size must be less than 5MB'
+    error.value = 'Kích thước file phải nhỏ hơn 5MB'
     event.target.value = ''
     return
   }
 
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
   if (!allowedTypes.includes(file.type)) {
-    error.value = 'Only JPG, PNG, GIF, and WebP images are supported'
+    error.value = 'Chỉ hỗ trợ ảnh JPG, PNG, GIF và WebP'
     event.target.value = ''
     return
   }
@@ -188,7 +199,7 @@ async function handleAvatarSelect(event) {
     pendingAvatarUrl.value = avatarUrl
   } catch (err) {
     console.error('Avatar upload failed:', err)
-    error.value = err.response?.data?.message || err.message || 'Failed to upload avatar'
+    error.value = err.response?.data?.message || err.message || 'Không thể tải lên avatar'
     previewAvatarUrl.value = null
     pendingAvatarUrl.value = null
   } finally {
@@ -222,16 +233,29 @@ async function handleSave() {
 
     authStore.user = response.data
 
-    successMessage.value = 'Profile updated successfully'
+    successMessage.value = 'Cập nhật hồ sơ thành công'
 
     setTimeout(() => {
       handleClose()
     }, 1000)
   } catch (err) {
     console.error('Profile update failed:', err)
-    error.value = err.response?.data?.message || err.message || 'Failed to update profile'
+    error.value = err.response?.data?.message || err.message || 'Không thể cập nhật hồ sơ'
   } finally {
     isUpdating.value = false
+  }
+}
+
+async function handleLogout() {
+  if (!confirm('Bạn có chắc chắn muốn đăng xuất?')) return
+  
+  try {
+    await authStore.logout()
+    emit('close')
+    router.push('/login')
+  } catch (error) {
+    console.error('Logout failed:', error)
+    error.value = 'Không thể đăng xuất. Vui lòng thử lại.'
   }
 }
 
@@ -240,6 +264,26 @@ function handleClose() {
     emit('close')
   }
 }
+
+function handleOverlayClick(event) {
+  if (event.target === event.currentTarget) {
+    handleClose()
+  }
+}
+
+function handleEscKey(event) {
+  if (event.key === 'Escape') {
+    handleClose()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleEscKey)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleEscKey)
+})
 </script>
 
 <style scoped>
@@ -254,21 +298,39 @@ function handleClose() {
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .modal-content {
-  background: #FFFFFF;
-  border-radius: 20px;
+  background: var(--color-surface);
+  border-radius: 16px;
   width: 90%;
-  max-width: 500px;
+  max-width: 520px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .modal-header {
-  padding: 24px 24px 16px;
+  padding: 20px 24px;
   border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
@@ -280,25 +342,23 @@ function handleClose() {
   font-size: 20px;
   font-weight: 700;
   color: var(--color-text-primary);
-  letter-spacing: -0.3px;
 }
 
 .close-btn {
-  background: none;
+  background: transparent;
   border: none;
-  font-size: 28px;
+  padding: 4px;
   cursor: pointer;
-  color: var(--color-text-tertiary);
-  padding: 0;
-  width: 32px;
-  height: 32px;
+  color: var(--color-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
 }
 
 .close-btn:hover {
+  background: var(--color-surface-hover);
   color: var(--color-text-primary);
 }
 
@@ -309,30 +369,30 @@ function handleClose() {
 }
 
 .error-message {
-  background: #FEF2F2;
+  background: var(--color-error-bg);
   color: var(--color-error);
-  padding: 14px 16px;
-  border-radius: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
   margin-bottom: 20px;
   font-size: 14px;
-  border: 1px solid rgba(214, 69, 69, 0.2);
+  border: 1px solid var(--color-error);
 }
 
 .success-message {
-  background: #D1FAE5;
-  color: #065F46;
-  padding: 14px 16px;
-  border-radius: 12px;
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  padding: 12px 16px;
+  border-radius: 10px;
   margin-bottom: 20px;
   font-size: 14px;
-  border: 1px solid #6EE7B7;
+  border: 1px solid var(--color-success);
 }
 
 .profile-avatar-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -342,27 +402,29 @@ function handleClose() {
   margin-bottom: 16px;
 }
 
-.avatar-large {
-  width: 120px;
-  height: 120px;
-  border-radius: 20px;
+.avatar-large,
+.avatar-large-img {
+  width: 100px;
+  height: 100px;
+  border-radius: 16px;
   overflow: hidden;
-  background: var(--color-gradient-warm);
+}
+
+.avatar-large {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 40px;
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.avatar-large img {
+.avatar-large-img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.avatar-large.avatar-placeholder {
-  color: white;
-  font-size: 48px;
-  font-weight: 700;
 }
 
 .avatar-uploading-overlay {
@@ -375,7 +437,7 @@ function handleClose() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
+  border-radius: 16px;
 }
 
 .spinner {
@@ -393,12 +455,12 @@ function handleClose() {
 
 .avatar-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 8px;
 }
 
 .upload-avatar-btn {
-  padding: 10px 20px;
+  padding: 10px 18px;
   background: var(--color-primary);
   color: white;
   border: none;
@@ -406,41 +468,35 @@ function handleClose() {
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
   display: inline-block;
 }
 
 .upload-avatar-btn:hover {
   background: var(--color-primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(224, 120, 86, 0.3);
-}
-
-.upload-avatar-btn input:disabled + label,
-.upload-avatar-btn:has(input:disabled) {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
 }
 
 .remove-avatar-btn {
-  padding: 10px 20px;
-  background: var(--color-bg-hover);
+  padding: 10px 18px;
+  background: var(--color-surface-hover);
   color: var(--color-text-primary);
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .remove-avatar-btn:hover:not(:disabled) {
-  background: var(--color-border);
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-color: var(--color-error);
 }
 
 .remove-avatar-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -454,7 +510,7 @@ function handleClose() {
 .profile-fields {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .form-group {
@@ -464,36 +520,30 @@ function handleClose() {
 }
 
 .form-group label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.form-input {
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 15px;
+  transition: all var(--transition-fast);
+  background: var(--color-input-bg);
   color: var(--color-text-primary);
 }
 
-.form-group input {
-  padding: 12px 16px;
-  border: 1.5px solid var(--color-border);
-  border-radius: 12px;
-  font-size: 15px;
-  transition: all 0.2s ease;
-  background: var(--color-bg-primary);
-}
-
-.form-group input:focus:not(:disabled) {
+.form-input:focus:not(:disabled) {
   outline: none;
   border-color: var(--color-primary);
-  background: white;
-  box-shadow: 0 0 0 4px rgba(224, 120, 86, 0.1);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
-.form-group input:disabled {
-  background: var(--color-bg-hover);
-  color: var(--color-text-secondary);
-  cursor: not-allowed;
-}
-
-.form-group input.read-only-input {
-  background: var(--color-bg-hover);
-  color: var(--color-text-secondary);
+.form-input.read-only {
+  background: var(--color-surface-hover);
+  color: var(--color-text-tertiary);
   cursor: not-allowed;
 }
 
@@ -503,50 +553,78 @@ function handleClose() {
 }
 
 .modal-footer {
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-top: 1px solid var(--color-border);
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+}
+
+.logout-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: 1px solid var(--color-error);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-error);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.logout-btn:hover:not(:disabled) {
+  background: var(--color-error);
+  color: white;
+}
+
+.logout-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.footer-spacer {
+  flex: 1;
 }
 
 .cancel-btn {
-  padding: 12px 24px;
-  background: var(--color-bg-hover);
-  border: none;
-  border-radius: 12px;
+  padding: 10px 20px;
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-text-primary);
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .cancel-btn:hover:not(:disabled) {
-  background: var(--color-border);
+  background: var(--color-surface-active);
 }
 
 .cancel-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .save-btn {
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .save-btn:hover:not(:disabled) {
   background: var(--color-primary-dark);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(224, 120, 86, 0.3);
 }
 
 .save-btn:disabled {
@@ -554,23 +632,5 @@ function handleClose() {
   color: var(--color-text-tertiary);
   cursor: not-allowed;
   transform: none;
-}
-
-:root {
-  --color-primary: #E07856;
-  --color-primary-dark: #C96644;
-  --color-primary-light: #FFF3EF;
-
-  --color-bg-primary: #FAF8F5;
-  --color-bg-hover: #F5F2EE;
-
-  --color-text-primary: #2C2C2C;
-  --color-text-secondary: #6B6B6B;
-  --color-text-tertiary: #9B9B9B;
-
-  --color-border: #E8E4DF;
-  --color-error: #D64545;
-
-  --color-gradient-warm: linear-gradient(135deg, #E07856 0%, #C96644 100%);
 }
 </style>
