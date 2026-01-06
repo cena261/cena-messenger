@@ -4,7 +4,7 @@
       <div class="sidebar-content">
         <div class="sidebar-header-section">
           <div class="sidebar-top">
-            <div class="brand">
+            <div class="brand" @click="handleLogoClick">
               <div class="brand-icon">
                 <svg viewBox="0 0 48 48" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                   <path d="M4 4H17.3334V17.3334H30.6666V30.6666H44V44H4V4Z"/>
@@ -245,6 +245,10 @@ function handleThemeChange(newTheme) {
   setTheme(newTheme)
 }
 
+function handleLogoClick() {
+  conversationsStore.clearActiveConversation()
+}
+
 function getHeaderInitial() {
   const user = authStore.user
   if (!user) return 'U'
@@ -364,6 +368,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  user-select: none;
+}
+
+.brand:hover {
+  opacity: 0.8;
 }
 
 .brand-icon {
