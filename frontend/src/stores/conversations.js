@@ -110,7 +110,7 @@ export const useConversationsStore = defineStore('conversations', () => {
   }
 
   function handleSeenEvent(seenEvent) {
-    console.log('Seen event received:', seenEvent)
+    // console.log('Seen event received:', seenEvent)
   }
 
   function updateConversationLastMessage(conversationId, message) {

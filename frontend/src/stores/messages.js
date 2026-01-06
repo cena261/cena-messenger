@@ -18,8 +18,6 @@ export const useMessagesStore = defineStore('messages', () => {
       const response = await messagesApi.getMessages(conversationId, page, size)
       const messages = response.data
 
-      console.log('Fetched messages:', messages)
-
       if (!messagesByConversation.value[conversationId]) {
         messagesByConversation.value[conversationId] = []
       }
@@ -132,15 +130,11 @@ export const useMessagesStore = defineStore('messages', () => {
       messagesByConversation.value[conversationId] = []
     }
 
-    const exists = messagesByConversation.value[conversationId].some(
-      m => m.id === message.id
-    )
+    const messages = messagesByConversation.value[conversationId]
+    const existingIndex = messages.findIndex(m => m.id === message.id)
 
-    if (!exists) {
-      messagesByConversation.value[conversationId] = [
-        ...messagesByConversation.value[conversationId],
-        message
-      ]
+    if (existingIndex === -1) {
+      messages.push(message)
     }
   }
 
@@ -150,10 +144,8 @@ export const useMessagesStore = defineStore('messages', () => {
 
     const messageIndex = messages.findIndex(m => m.id === messageId)
     if (messageIndex !== -1) {
-      messages[messageIndex] = {
-        ...messages[messageIndex],
-        ...updates
-      }
+      const updatedMessage = { ...messages[messageIndex], ...updates }
+      messages[messageIndex] = updatedMessage
     }
   }
 
@@ -174,7 +166,7 @@ export const useMessagesStore = defineStore('messages', () => {
   }
 
   function handleMessageUpdate(updateData) {
-    console.log('handleMessageUpdate called with:', updateData)
+
     const { conversationId, messageId, action, content, updatedAt, isDeleted, deleted } = updateData
 
     if (action === 'EDIT' || action === 'EDITED') {

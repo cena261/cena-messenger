@@ -479,9 +479,24 @@ function formatSeenIndicator(seenByUsers) {
   }
 }
 
+let scrollPending = false
+
+function requestScrollCheck() {
+  if (scrollPending) return
+  scrollPending = true
+  requestAnimationFrame(() => {
+    scrollPending = false
+    scrollToBottomIfNearBottom()
+  })
+}
+
 watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
   if (oldId) {
     handleStopTyping()
+    if (typingTimeout.value) {
+      clearTimeout(typingTimeout.value)
+      typingTimeout.value = null
+    }
     realtimeStore.unsubscribeFromConversation(oldId)
   }
 
@@ -490,6 +505,8 @@ watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
     cancelReply()
     showReactionPicker.value = null
     sendError.value = null
+    closeMessageSearch()
+    isSearching.value = false
     await loadMessages()
     realtimeStore.subscribeToConversation(newId)
     await nextTick()
@@ -497,15 +514,15 @@ watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
   }
 }, { immediate: true })
 
-watch(messages, async () => {
-  await nextTick()
-  scrollToBottomIfNearBottom()
-}, { deep: true })
+watch(() => messages.value.length, () => {
+  nextTick(requestScrollCheck)
+})
 
-watch(typingUsersDisplay, async () => {
-  await nextTick()
-  scrollToBottomIfNearBottom()
-}, { deep: true })
+watch(() => typingUsersDisplay.value.length, () => {
+  if (typingUsersDisplay.value.length > 0) {
+    nextTick(requestScrollCheck)
+  }
+})
 
 onMounted(async () => {
   if (conversationsStore.activeConversationId) {
@@ -518,8 +535,14 @@ onMounted(async () => {
 
 onUnmounted(() => {
   handleStopTyping()
+  if (typingTimeout.value) {
+    clearTimeout(typingTimeout.value)
+    typingTimeout.value = null
+  }
+  cleanupSearch()
   if (conversationsStore.activeConversationId) {
     realtimeStore.unsubscribeFromConversation(conversationsStore.activeConversationId)
+    realtimeStore.clearTypingUsers(conversationsStore.activeConversationId)
   }
 })
 
@@ -646,18 +669,22 @@ function isEdited(message) {
 }
 
 function isNearBottom() {
-  if (!messagesContainer.value) return true
+  const container = messagesContainer.value
+  if (!container) return true
   const threshold = 150
-  const scrollTop = messagesContainer.value.scrollTop
-  const scrollHeight = messagesContainer.value.scrollHeight
-  const clientHeight = messagesContainer.value.clientHeight
+  const scrollTop = container.scrollTop
+  const scrollHeight = container.scrollHeight
+  const clientHeight = container.clientHeight
   return scrollHeight - scrollTop - clientHeight < threshold
 }
 
 function scrollToBottom() {
-  if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
-  }
+  requestAnimationFrame(() => {
+    const container = messagesContainer.value
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
+  })
 }
 
 function scrollToBottomIfNearBottom() {
@@ -807,12 +834,10 @@ async function handleSearch() {
 
   searchDebounce = setTimeout(async () => {
     try {
-      console.log('Searching in conversation:', conversationsStore.activeConversationId, 'Query:', searchQuery.value)
       const response = await messagesApi.searchMessages(
         conversationsStore.activeConversationId,
         searchQuery.value
       )
-      console.log('Search response:', response)
       searchResults.value = response.data.messages || []
       currentResultIndex.value = 0
       
@@ -824,6 +849,17 @@ async function handleSearch() {
       searchResults.value = []
     }
   }, 300)
+}
+
+function cleanupSearch() {
+  if (searchDebounce) {
+    clearTimeout(searchDebounce)
+    searchDebounce = null
+  }
+  searchQuery.value = ''
+  searchResults.value = []
+  currentResultIndex.value = 0
+  highlightedMessageId.value = null
 }
 
 function nextResult() {
@@ -1083,6 +1119,7 @@ function handleStopTyping() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  user-select: none;
 }
 
 .date-separator {
@@ -1102,6 +1139,7 @@ function handleStopTyping() {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border: 1px solid var(--color-date-separator-border);
+  user-select: none;
 }
 
 .message-wrapper {
@@ -1132,6 +1170,7 @@ function handleStopTyping() {
   font-size: 14px;
   font-weight: 600;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .message-avatar-spacer {
@@ -1155,6 +1194,7 @@ function handleStopTyping() {
   font-weight: 600;
   color: var(--color-text-secondary);
   margin-left: 12px;
+  user-select: none;
 }
 
 .message-bubble {
@@ -1162,6 +1202,8 @@ function handleStopTyping() {
   border-radius: 18px;
   position: relative;
   word-wrap: break-word;
+  user-select: none;
+  transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
 .message-bubble.received {
@@ -1290,6 +1332,7 @@ function handleStopTyping() {
   gap: 4px;
   margin-top: 6px;
   flex-wrap: wrap;
+  user-select: none;
 }
 
 .reaction-badge {

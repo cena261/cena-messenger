@@ -24,8 +24,6 @@ export const useRealtimeStore = defineStore('realtime', () => {
 
     // Subscribe to unread count updates
     websocketService.subscribe(`/user/queue/unread`, async (data) => {
-      console.log('Unread update received:', data)
-
       const conversation = conversationsStore.conversations.find(
         c => c.id === data.conversationId
       )
@@ -47,22 +45,22 @@ export const useRealtimeStore = defineStore('realtime', () => {
     })
 
     websocketService.subscribe(`/user/queue/typing`, (data) => {
-      console.log('Typing event received:', data)
+
       handleTypingEvent(data)
     })
 
     websocketService.subscribe(`/user/queue/message-updates`, (data) => {
-      console.log('Message update event received:', data)
+
       messagesStore.handleMessageUpdate(data)
     })
 
     websocketService.subscribe(`/user/queue/group-events`, async (data) => {
-      console.log('Group event received:', data)
+
       await handleGroupEvent(data)
     })
 
     websocketService.subscribe(`/user/queue/reactions`, (data) => {
-      console.log('Reaction event received:', data)
+
       messagesStore.handleReactionUpdate(data)
     })
   }
@@ -70,7 +68,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
   async function handleGroupEvent(data) {
     const conversationsStore = useConversationsStore()
 
-    console.log('Handling group event:', data.eventType, 'for conversation:', data.conversationId)
+
 
     await conversationsStore.fetchConversations()
   }
@@ -79,16 +77,15 @@ export const useRealtimeStore = defineStore('realtime', () => {
     const messagesStore = useMessagesStore()
     const destination = `/topic/conversation.${conversationId}`
 
-    console.log('subscribeToConversation called for:', conversationId)
+
 
     const existingSubscription = subscriptions.value.find(s => s.conversationId === conversationId)
     if (existingSubscription) {
-      console.log('Already subscribed to conversation:', conversationId)
       return
     }
 
     const unsubscribeFn = websocketService.subscribe(destination, async (message) => {
-      console.log('Message received via WebSocket:', message)
+
       messagesStore.addMessage(conversationId, message)
 
       const conversationsStore = useConversationsStore()
@@ -99,7 +96,7 @@ export const useRealtimeStore = defineStore('realtime', () => {
         try {
           const conversationsApi = await import('../api/conversations')
           await conversationsApi.markConversationAsRead(conversationId)
-          console.log('Auto-marked conversation as read:', conversationId)
+
         } catch (error) {
           console.error('Failed to auto-mark conversation as read:', error)
         }
@@ -107,19 +104,21 @@ export const useRealtimeStore = defineStore('realtime', () => {
     })
 
     subscriptions.value.push({ conversationId, destination, unsubscribe: unsubscribeFn })
-    console.log('Subscribed to conversation:', conversationId, 'Total subscriptions:', subscriptions.value.length)
+
   }
 
   function unsubscribeFromConversation(conversationId) {
-    const destination = `/topic/conversation.${conversationId}`
-    console.log('unsubscribeFromConversation called for:', conversationId)
-
-    websocketService.unsubscribe(destination)
-
     const index = subscriptions.value.findIndex(s => s.conversationId === conversationId)
+
     if (index !== -1) {
+      const subscription = subscriptions.value[index]
+      if (subscription.unsubscribe && typeof subscription.unsubscribe === 'function') {
+        subscription.unsubscribe()
+      } else {
+        const destination = `/topic/conversation.${conversationId}`
+        websocketService.unsubscribe(destination)
+      }
       subscriptions.value.splice(index, 1)
-      console.log('Unsubscribed from conversation:', conversationId, 'Remaining subscriptions:', subscriptions.value.length)
     }
   }
 
@@ -132,25 +131,35 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function handleTypingEvent(data) {
+    const { conversationId, userId, typing } = data
     const authStore = useAuthStore()
-    const { conversationId, userId, isTyping, typing } = data
-
-    const typingStatus = isTyping !== undefined ? isTyping : typing
 
     if (userId === authStore.user?.id) {
       return
     }
 
     if (!typingUsers.value[conversationId]) {
-      typingUsers.value[conversationId] = []
+      typingUsers.value[conversationId] = {}
     }
 
-    if (typingStatus) {
-      if (!typingUsers.value[conversationId].includes(userId)) {
-        typingUsers.value[conversationId] = [...typingUsers.value[conversationId], userId]
-      }
+    if (typing) {
+      typingUsers.value[conversationId][userId] = Date.now()
+
+      setTimeout(() => {
+        if (typingUsers.value[conversationId] && typingUsers.value[conversationId][userId]) {
+          delete typingUsers.value[conversationId][userId]
+          if (Object.keys(typingUsers.value[conversationId]).length === 0) {
+            delete typingUsers.value[conversationId]
+          }
+        }
+      }, 5000)
     } else {
-      typingUsers.value[conversationId] = typingUsers.value[conversationId].filter(id => id !== userId)
+      if (typingUsers.value[conversationId]) {
+        delete typingUsers.value[conversationId][userId]
+        if (Object.keys(typingUsers.value[conversationId]).length === 0) {
+          delete typingUsers.value[conversationId]
+        }
+      }
     }
   }
 
@@ -165,34 +174,27 @@ export const useRealtimeStore = defineStore('realtime', () => {
   }
 
   function getTypingUsers(conversationId) {
-    return typingUsers.value[conversationId] || []
+    return typingUsers.value[conversationId] || {}
   }
 
   function getTypingUsersDisplay(conversationId) {
     const conversationsStore = useConversationsStore()
+    const authStore = useAuthStore()
     const conversation = conversationsStore.conversations.find(c => c.id === conversationId)
+    if (!conversation) return []
 
-    if (!conversation) {
-      return []
-    }
+    const currentUserId = authStore.user?.id
+    const typingUserIds = Object.keys(typingUsers.value[conversationId] || {})
+      .filter(uid => uid !== currentUserId)
 
-    const typingUserIds = typingUsers.value[conversationId] || []
-
-    return typingUserIds.map(userId => {
-      const member = conversation.members?.find(m => m.userId === userId)
-      const displayName = member?.displayName || member?.username || 'Unknown'
-      return {
-        userId,
-        displayName
-      }
-    })
+    return conversation.members
+      ?.filter(m => typingUserIds.includes(m.userId))
+      .map(m => ({ userId: m.userId, displayName: m.displayName || m.username })) || []
   }
 
   function clearTypingUsers(conversationId) {
-    if (conversationId) {
+    if (conversationId && typingUsers.value[conversationId]) {
       delete typingUsers.value[conversationId]
-    } else {
-      typingUsers.value = {}
     }
   }
 
