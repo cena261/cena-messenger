@@ -1,8 +1,8 @@
 <template>
   <div v-if="isOpen" class="modal-overlay" @click="handleOverlayClick">
-    <div class="modal-content" @click.stop>
+    <div class="modal-content" @click.stop">
       <div class="modal-header">
-        <h2>Đoạn chat mới</h2>
+        <h2>Nhóm chat mới</h2>
         <button class="close-btn" @click="handleClose">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
@@ -21,8 +21,19 @@
           {{ error }}
         </div>
 
-        <div class="search-section">
-          <label class="search-label">Tìm người để nhắn tin</label>
+        <div class="form-group">
+          <label class="form-label">Tên nhóm</label>
+          <input
+            v-model="groupName"
+            type="text"
+            placeholder="Nhập tên nhóm..."
+            class="form-input"
+            autofocus
+          />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Thêm thành viên</label>
           <div class="search-input-wrapper">
             <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"/>
@@ -31,53 +42,117 @@
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="Nhập tên, username, email hoặc số điện thoại..."
+              placeholder="Tìm kiếm để thêm thành viên..."
               @input="handleSearch"
               class="search-input"
-              autofocus
             />
           </div>
         </div>
 
+        <div v-if="selectedMembers.length > 0" class="selected-section">
+          <div class="section-header">
+            <h4>Đã chọn ({{ selectedMembers.length }})</h4>
+          </div>
+          <div class="selected-list">
+            <div
+              v-for="member in selectedMembers"
+              :key="member.userId"
+              class="member-chip"
+            >
+              <div class="chip-avatar">{{ getInitial(member) }}</div>
+              <span class="chip-name">{{ member.displayName || member.username }}</span>
+              <button @click="removeMember(member)" class="chip-remove">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div v-if="isSearching" class="loading-state">
-          <div class="spinner"></div>
+          <div class="spinner-small"></div>
           <p>Đang tìm kiếm...</p>
         </div>
 
-        <div v-else-if="searchResult" class="search-result">
-          <div class="result-card">
-            <div class="user-avatar">
-              {{ searchResult.displayName?.charAt(0) || searchResult.username?.charAt(0) }}
-            </div>
+        <div v-else-if="searchQuery && searchResult" class="search-results">
+          <div class="section-header">
+            <h4>Kết quả tìm kiếm</h4>
+          </div>
+          <div
+            class="user-item"
+            @click="addMember(searchResult)"
+            :class="{ disabled: isSelected(searchResult) }"
+          >
+            <div class="user-avatar">{{ getInitial(searchResult) }}</div>
             <div class="user-info">
               <div class="user-name">{{ searchResult.displayName || searchResult.username }}</div>
               <div class="user-username">@{{ searchResult.username }}</div>
             </div>
-            <div class="user-badge">
+            <button v-if="!isSelected(searchResult)" class="add-btn">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                <polyline points="22 4 12 14.01 9 11.01"/>
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+            <div v-else class="added-badge">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
               </svg>
             </div>
           </div>
         </div>
 
         <div v-else-if="searchQuery && !isSearching" class="no-results">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="11" cy="11" r="8"/>
             <path d="m21 21-4.35-4.35"/>
           </svg>
-          <p>Không tìm thấy người dùng</p>
-          <span>Hãy thử tìm kiếm với username, email hoặc số điện thoại khác</span>
+          <p>Không tìm thấy</p>
+        </div>
+
+        <div v-else-if="conversationUsers.length > 0" class="user-list-section">
+          <div class="section-header">
+            <h4>Người đã trò chuyện</h4>
+          </div>
+          <div class="user-list">
+            <div
+              v-for="user in conversationUsers"
+              :key="user.userId"
+              class="user-item"
+              @click="addMember(user)"
+              :class="{ disabled: isSelected(user) }"
+            >
+              <div class="user-avatar">{{ getInitial(user) }}</div>
+              <div class="user-info">
+                <div class="user-name">{{ user.displayName || user.username }}</div>
+                <div class="user-username">@{{ user.username }}</div>
+              </div>
+              <button v-if="!isSelected(user)" class="add-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+              <div v-else class="added-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div v-else class="empty-state">
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
-          <p>Tìm kiếm người dùng</p>
-          <span>Nhập tên, username, email hoặc số điện thoại để bắt đầu</span>
+          <p>Tìm kiếm để thêm thành viên</p>
+          <span>Sử dụng ô tìm kiếm ở trên để tìm và thêm thành viên vào nhóm</span>
         </div>
       </div>
 
@@ -89,7 +164,7 @@
           :disabled="!canCreate || isCreating"
         >
           <span v-if="isCreating" class="spinner-small"></span>
-          {{ isCreating ? 'Đang tạo...' : 'Bắt đầu trò chuyện' }}
+          {{ isCreating ? 'Đang tạo...' : 'Tạo nhóm' }}
         </button>
       </div>
     </div>
@@ -100,25 +175,50 @@
 import { ref, computed, watch } from 'vue'
 import { searchUser } from '../api/users'
 import { useConversationsStore } from '../stores/conversations'
+import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({
   isOpen: Boolean
 })
 
-const emit = defineEmits(['close', 'conversationCreated'])
+const emit = defineEmits(['close', 'groupCreated'])
 
 const conversationsStore = useConversationsStore()
+const authStore = useAuthStore()
 
+const groupName = ref('')
 const searchQuery = ref('')
 const searchResult = ref(null)
 const isSearching = ref(false)
 const error = ref(null)
+const selectedMembers = ref([])
 const isCreating = ref(false)
 let searchTimeout = null
-let searchedUsers = new Map()
+
+const conversationUsers = computed(() => {
+  const users = new Map()
+  const currentUserId = authStore.user?.id
+
+  conversationsStore.conversations.forEach(conv => {
+    if (conv.members) {
+      conv.members.forEach(member => {
+        if (member.userId !== currentUserId && !users.has(member.userId)) {
+          users.set(member.userId, {
+            userId: member.userId,
+            username: member.username,
+            displayName: member.displayName,
+            avatarUrl: member.avatarUrl
+          })
+        }
+      })
+    }
+  })
+
+  return Array.from(users.values())
+})
 
 const canCreate = computed(() => {
-  return searchResult.value !== null
+  return groupName.value.trim() && selectedMembers.value.length >= 1
 })
 
 watch(() => props.isOpen, (newVal) => {
@@ -142,12 +242,34 @@ watch(() => props.isOpen, (isOpen) => {
 })
 
 function resetForm() {
+  groupName.value = ''
   searchQuery.value = ''
   searchResult.value = null
+  selectedMembers.value = []
   error.value = null
   isSearching.value = false
   isCreating.value = false
-  searchedUsers.clear()
+}
+
+function getInitial(user) {
+  const name = user.displayName || user.username || '?'
+  return name.charAt(0).toUpperCase()
+}
+
+function isSelected(user) {
+  return selectedMembers.value.some(m => m.userId === user.userId)
+}
+
+function addMember(user) {
+  if (!isSelected(user)) {
+    selectedMembers.value.push(user)
+    searchQuery.value = ''
+    searchResult.value = null
+  }
+}
+
+function removeMember(user) {
+  selectedMembers.value = selectedMembers.value.filter(m => m.userId !== user.userId)
 }
 
 function handleSearch() {
@@ -165,17 +287,10 @@ function handleSearch() {
   searchTimeout = setTimeout(async () => {
     const query = searchQuery.value.trim()
 
-    if (searchedUsers.has(query)) {
-      searchResult.value = searchedUsers.get(query)
-      return
-    }
-
     isSearching.value = true
     try {
       const response = await searchUser(query)
-      const user = response.data
-      searchedUsers.set(query, user)
-      searchResult.value = user
+      searchResult.value = response.data
     } catch (err) {
       error.value = err.response?.data?.message || 'Tìm kiếm thất bại'
     } finally {
@@ -191,18 +306,21 @@ async function handleCreate() {
   error.value = null
 
   try {
-    const targetUserId = searchResult.value.userId
-    const newConversation = await conversationsStore.createDirectConversation(targetUserId)
+    const memberUserIds = selectedMembers.value.map(m => m.userId)
+    const newGroup = await conversationsStore.createGroupConversation(
+      groupName.value.trim(),
+      memberUserIds
+    )
 
-    if (!newConversation) {
-      throw new Error('Failed to create conversation')
+    if (!newGroup) {
+      throw new Error('Failed to create group')
     }
 
-    emit('conversationCreated', newConversation)
+    emit('groupCreated', newGroup)
     emit('close')
   } catch (err) {
-    console.error('Error creating conversation:', err)
-    error.value = err.response?.data?.message || err.message || 'Không thể tạo đoạn chat'
+    console.error('Error creating group:', err)
+    error.value = err.response?.data?.message || err.message || 'Không thể tạo nhóm'
     isCreating.value = false
   }
 }
@@ -236,20 +354,16 @@ function handleOverlayClick(event) {
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .modal-content {
   background: var(--color-surface);
   border-radius: 20px;
-  width: 500px;
+  width: 540px;
   max-width: 90vw;
-  max-height: 80vh;
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);
@@ -306,7 +420,6 @@ function handleOverlayClick(event) {
   padding: 24px;
   overflow-y: auto;
   flex: 1;
-  min-height: 400px;
 }
 
 .error-message {
@@ -322,16 +435,38 @@ function handleOverlayClick(event) {
   border: 1px solid rgba(220, 38, 38, 0.2);
 }
 
-.search-section {
-  margin-bottom: 24px;
+.form-group {
+  margin-bottom: 20px;
 }
 
-.search-label {
+.form-label {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
   font-weight: 600;
   font-size: 14px;
   color: var(--color-text-primary);
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  font-size: 15px;
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px var(--color-primary-light);
+  background: var(--color-surface);
+}
+
+.form-input::placeholder {
+  color: var(--color-text-tertiary);
 }
 
 .search-input-wrapper {
@@ -354,7 +489,7 @@ function handleOverlayClick(event) {
 
 .search-input {
   width: 100%;
-  padding: 14px 16px 14px 48px;
+  padding: 12px 16px 12px 48px;
   border: 1.5px solid var(--color-border);
   border-radius: 12px;
   font-size: 15px;
@@ -374,63 +509,138 @@ function handleOverlayClick(event) {
   color: var(--color-text-tertiary);
 }
 
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
+.section-header {
+  margin-bottom: 12px;
+}
+
+.section-header h4 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: var(--color-text-secondary);
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-state p {
-  font-size: 14px;
   margin: 0;
 }
 
-.search-result {
-  animation: fadeIn 0.3s ease;
+.selected-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.result-card {
+.selected-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.member-chip {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border: 2px solid var(--color-primary);
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
   background: var(--color-primary-light);
-  border-radius: 16px;
+  border: 1px solid var(--color-primary);
+  border-radius: 20px;
+  font-size: 14px;
   transition: all var(--transition-fast);
 }
 
-.user-avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
+.chip-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 22px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.chip-name {
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.chip-remove {
+  background: transparent;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast);
+}
+
+.chip-remove:hover {
+  color: var(--color-error);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--color-text-secondary);
+}
+
+.loading-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.user-list-section,
+.search-results {
+  margin-top: 20px;
+}
+
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.user-item:hover:not(.disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary);
+}
+
+.user-item.disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.user-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
   text-transform: uppercase;
   flex-shrink: 0;
-  box-shadow: var(--shadow-md);
 }
 
 .user-info {
@@ -439,9 +649,9 @@ function handleOverlayClick(event) {
 }
 
 .user-name {
-  font-weight: 700;
-  font-size: 16px;
-  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 2px;
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -449,14 +659,35 @@ function handleOverlayClick(event) {
 }
 
 .user-username {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.user-badge {
+.add-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.add-btn:hover {
+  background: var(--color-primary);
+  color: white;
+  transform: scale(1.1);
+}
+
+.added-badge {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -474,7 +705,7 @@ function handleOverlayClick(event) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 40px 20px;
   text-align: center;
   color: var(--color-text-secondary);
 }
@@ -494,7 +725,6 @@ function handleOverlayClick(event) {
   margin: 0 0 8px 0;
 }
 
-.no-results span,
 .empty-state span {
   font-size: 14px;
   color: var(--color-text-secondary);
@@ -554,16 +784,15 @@ function handleOverlayClick(event) {
 }
 
 .spinner-small {
-  display: none;
-}
-
-.create-btn:disabled .spinner-small {
-  display: inline-block;
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>
