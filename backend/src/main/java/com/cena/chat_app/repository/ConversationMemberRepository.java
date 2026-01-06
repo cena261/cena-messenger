@@ -10,4 +10,5 @@ public interface ConversationMemberRepository extends MongoRepository<Conversati
     List<ConversationMember> findByUserId(String userId);
     List<ConversationMember> findByConversationId(String conversationId);
     Optional<ConversationMember> findByConversationIdAndUserId(String conversationId, String userId);
+    long countByConversationId(String conversationId);
 }

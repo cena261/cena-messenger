@@ -1,4 +1,4 @@
-package com.cena.chat_app.dto.response;
+package com.cena.chat_app.dto.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,9 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserSearchResponse {
-    private String userId;
-    private String username;
+public class UpdateProfileRequest {
     private String displayName;
     private String avatarUrl;
 }
