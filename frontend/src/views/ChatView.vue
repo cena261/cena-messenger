@@ -4,71 +4,88 @@
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       <path d="M9 10h6M9 14h4"/>
     </svg>
-    <h2>Welcome to Chats</h2>
-    <p>Select a conversation to start messaging</p>
+    <h2>Chào mừng đến với Cena</h2>
+    <p>Chọn một cuộc trò chuyện để bắt đầu nhắn tin</p>
   </div>
 
   <div v-else class="chat-view">
-    <!-- Header -->
-    <div class="chat-header">
+    <header class="chat-header">
       <div class="header-info">
         <div class="chat-avatar">
-          <div class="avatar-placeholder">{{ conversationName.charAt(0) }}</div>
+          <div v-if="conversationAvatar" class="avatar-image">
+            <img :src="conversationAvatar" :alt="conversationName">
+          </div>
+          <div v-else class="avatar-placeholder">{{ conversationName.charAt(0) }}</div>
+          <div v-if="isOnline" class="online-indicator"></div>
         </div>
         <div class="chat-details">
           <h2 class="chat-name">{{ conversationName }}</h2>
           <p v-if="typingUsersDisplay.length > 0" class="chat-status typing">
-            <span class="typing-dot"></span>
-            <span class="typing-dot"></span>
-            <span class="typing-dot"></span>
+            <span class="typing-dots">
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+            </span>
             <span v-if="typingUsersDisplay.length === 1">
-              {{ typingUsersDisplay[0].displayName }} is typing
+              {{ typingUsersDisplay[0].displayName }} đang nhập...
             </span>
             <span v-else>
-              {{ typingUsersDisplay.length }} people are typing
+              {{ typingUsersDisplay.length }} người đang nhập...
             </span>
+          </p>
+          <p v-else-if="conversationsStore.activeConversation?.type === 'GROUP'" class="chat-status">
+            {{ getMemberCount() }} thành viên
           </p>
         </div>
       </div>
       <div class="header-actions">
+        <button @click="toggleMessageSearch" class="header-btn" title="Tìm tin nhắn">
+          <Search :size="20" />
+        </button>
         <button
           v-if="conversationsStore.activeConversation?.type === 'GROUP'"
           @click="openGroupManagement"
           class="header-btn"
-          title="Group Settings"
+          title="Thông tin nhóm"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 1v6m0 6v6m6-10l-4.5 4.5m-3 3L6 23m5-11l6 6m-12 0l6-6"/>
-          </svg>
-        </button>
-        <button
-          v-if="otherUserId && !blockingStore.isUserBlocked(otherUserId)"
-          @click="handleBlockUser"
-          class="header-btn"
-          title="Block User"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-          </svg>
-        </button>
-        <button
-          v-if="otherUserId && blockingStore.isUserBlocked(otherUserId)"
-          @click="handleUnblockUser"
-          class="header-btn primary"
-          title="Unblock User"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M9 11l3 3L22 4"/>
-            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-          </svg>
+          <Info :size="20" />
         </button>
       </div>
+    </header>
+
+    <div v-if="isSearching" class="message-search-bar">
+      <div class="search-input-wrapper">
+        <Search :size="18" />
+        <input 
+          v-model="searchQuery"
+          @input="handleSearch"
+          @keydown.enter="nextResult"
+          @keydown.shift.enter.prevent="previousResult"
+          placeholder="Tìm kiếm tin nhắn..."
+          class="search-input"
+          ref="searchInput"
+        />
+        <button v-if="searchQuery" @click="clearMessageSearch" class="clear-btn">
+          <X :size="16" />
+        </button>
+      </div>
+      
+      <div v-if="searchResults.length > 0" class="search-navigation">
+        <span class="search-count">{{ currentResultIndex + 1}}/{{ searchResults.length }}</span>
+        <button @click="nextResult" :disabled="currentResultIndex === searchResults.length - 1" class="nav-btn">
+          <ChevronUp :size="18" />
+        </button>
+        <button @click="previousResult" :disabled="currentResultIndex === 0" class="nav-btn">
+          <ChevronDown :size="18" />
+        </button>
+      </div>
+      
+      <button @click="closeMessageSearch" class="close-search-btn">
+        <X :size="20" />
+      </button>
     </div>
 
-    <!-- Messages Container -->
-    <div class="messages-container" ref="messagesContainer">
+    <div class="messages-container custom-scrollbar" ref="messagesContainer">
       <div v-if="messagesStore.isLoading" class="messages-loading">
         <div class="spinner"></div>
       </div>
@@ -77,21 +94,27 @@
         <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
-        <p>No messages yet. Start the conversation!</p>
+        <p>Chưa có tin nhắn. Hãy bắt đầu cuộc trò chuyện!</p>
       </div>
 
       <div v-else class="messages-list">
-        <div v-for="(message, index) in messages" :key="message.id" class="message-wrapper">
-          <!-- Message Bubble -->
+        <div class="date-separator">
+          <div class="date-label">Hôm nay</div>
+        </div>
+
+        <div 
+          v-for="(message, index) in messages" 
+          :key="message.id" 
+          :id="`message-${message.id}`"
+          :class="['message-wrapper', { 'highlighted': highlightedMessageId === message.id }]"
+        >
           <div :class="['message', message.senderId === authStore.user?.id ? 'own' : 'other']">
-            <!-- Avatar for received messages -->
             <div v-if="message.senderId !== authStore.user?.id && shouldShowAvatar(index)" class="message-avatar">
               <div class="avatar-small">{{ getUserInitial(message.senderId) }}</div>
             </div>
             <div v-else-if="message.senderId !== authStore.user?.id" class="message-avatar-spacer"></div>
 
             <div class="message-content-wrapper">
-              <!-- Sender name for received messages in groups -->
               <div
                 v-if="message.senderId !== authStore.user?.id && conversationsStore.activeConversation?.type === 'GROUP' && shouldShowAvatar(index)"
                 class="message-sender-name"
@@ -99,7 +122,6 @@
                 {{ message.senderDisplayName || message.senderUsername }}
               </div>
 
-              <!-- Reply Context -->
               <div v-if="message.replyTo" class="message-reply-context">
                 <div class="reply-bar"></div>
                 <div class="reply-content">
@@ -108,81 +130,65 @@
                 </div>
               </div>
 
-              <!-- Edit Mode -->
               <div v-if="editingMessageId === message.id" class="message-edit">
                 <input
                   v-model="editContent"
                   @keyup.enter="saveEdit"
                   @keyup.escape="cancelEdit"
-                  placeholder="Edit message..."
+                  placeholder="Chỉnh sửa tin nhắn..."
                   class="edit-input"
                 />
                 <div class="edit-actions">
-                  <button @click="saveEdit" class="edit-btn save">Save</button>
-                  <button @click="cancelEdit" class="edit-btn cancel">Cancel</button>
+                  <button @click="saveEdit" class="edit-btn save">Lưu</button>
+                  <button @click="cancelEdit" class="edit-btn cancel">Hủy</button>
                 </div>
               </div>
 
-              <!-- Message Bubble -->
               <div v-else :class="['message-bubble', message.senderId === authStore.user?.id ? 'sent' : 'received']">
-                <span v-if="isMessageDeleted(message)" class="deleted-text">This message was deleted</span>
+                <span v-if="isMessageDeleted(message)" class="deleted-text">Tin nhắn đã bị xóa</span>
 
                 <div v-else-if="message.type === 'IMAGE'" class="media-content">
                   <img :src="message.mediaUrl" :alt="message.mediaMetadata?.fileName" class="media-image" />
                 </div>
 
-                <div v-else-if="message.type === 'VIDEO' || message.type === 'AUDIO'" class="media-placeholder">
-                  <div class="media-icon">{{ message.type === 'VIDEO' ? '🎥' : '🎵' }}</div>
-                  <div class="media-info">
-                    <span class="media-name">{{ message.mediaMetadata?.fileName || message.type.toLowerCase() }}</span>
-                    <a :href="message.mediaUrl" target="_blank" class="media-download">Download</a>
-                  </div>
-                </div>
-
-                <div v-else-if="message.type === 'MEDIA'" class="media-placeholder">
-                  <a :href="message.mediaUrl" target="_blank" class="media-link">
-                    📎 {{ message.mediaMetadata?.fileName || 'Download file' }}
-                  </a>
-                </div>
-
                 <div v-else class="message-text">
                   {{ message.content }}
-                  <span v-if="isEdited(message)" class="edited-badge">edited</span>
+                  <span v-if="isEdited(message)" class="edited-badge">đã chỉnh sửa</span>
                 </div>
 
-                <!-- Reactions -->
                 <div v-if="!isMessageDeleted(message) && message.reactions && Object.keys(message.reactions).length > 0" class="message-reactions">
                   <button
                     v-for="(emoji, userId) in message.reactions"
                     :key="userId"
                     :class="['reaction-badge', { own: userId === authStore.user?.id }]"
                     @click="handleToggleReaction(message.id, emoji)"
-                    :title="`${getUserDisplayName(userId)}`"
+                    :title="getUserDisplayName(userId)"
                   >
                     {{ emoji }}
                   </button>
                 </div>
               </div>
 
-              <!-- Message Footer -->
-              <div class="message-footer">
+              <div class="message-meta">
                 <span class="message-time">{{ formatTime(message.createdAt) }}</span>
 
-                <!-- Seen indicator for own messages -->
                 <span
                   v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)"
                   class="message-seen"
                 >
+                  <svg v-if="getSeenByUsers(message).length > 0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                  </svg>
                   {{ formatSeenIndicator(getSeenByUsers(message)) }}
                 </span>
 
-                <!-- Actions -->
                 <div class="message-actions">
                   <button
                     v-if="!isMessageDeleted(message)"
                     @click="startReply(message)"
                     class="action-btn"
-                    title="Reply"
+                    title="Trả lời"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M9 14L4 9l5-5"/>
@@ -194,7 +200,7 @@
                     v-if="!isMessageDeleted(message)"
                     @click="toggleReactionPicker(message.id)"
                     class="action-btn"
-                    title="React"
+                    title="Thả cảm xúc"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <circle cx="12" cy="12" r="10"/>
@@ -208,7 +214,7 @@
                     v-if="message.senderId === authStore.user?.id && message.type === 'TEXT' && !isMessageDeleted(message)"
                     @click="startEdit(message)"
                     class="action-btn"
-                    title="Edit"
+                    title="Chỉnh sửa"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -220,7 +226,7 @@
                     v-if="message.senderId === authStore.user?.id && !isMessageDeleted(message)"
                     @click="handleDeleteMessage(message.id)"
                     class="action-btn delete"
-                    title="Delete"
+                    title="Xóa"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="3 6 5 6 21 6"/>
@@ -230,7 +236,6 @@
                 </div>
               </div>
 
-              <!-- Reaction Picker -->
               <div v-if="showReactionPicker === message.id" class="reaction-picker">
                 <button
                   v-for="emoji in availableReactions"
@@ -244,12 +249,25 @@
             </div>
           </div>
         </div>
+
+        <div v-if="typingUsersDisplay.length > 0" class="typing-indicator-message">
+          <div class="message other">
+            <div class="message-avatar">
+              <div class="avatar-small">{{ typingUsersDisplay[0].displayName.charAt(0) }}</div>
+            </div>
+            <div class="message-content-wrapper">
+              <div class="typing-bubble">
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+                <span class="typing-dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Input Area -->
     <div class="input-container">
-      <!-- Error Messages -->
       <div v-if="sendError" class="input-error">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
@@ -259,25 +277,6 @@
         {{ sendError }}
       </div>
 
-      <div v-if="editError" class="input-error">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        {{ editError }}
-      </div>
-
-      <div v-if="deleteError" class="input-error">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        {{ deleteError }}
-      </div>
-
-      <!-- Reply Preview -->
       <div v-if="replyingTo" class="reply-preview">
         <div class="reply-info">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -297,22 +296,13 @@
         </button>
       </div>
 
-      <!-- Upload Preview -->
-      <div v-if="uploadingFile" class="upload-preview">
-        <div class="upload-info">
-          <div class="upload-spinner"></div>
-          <span>Uploading {{ uploadingFile.name }}...</span>
-        </div>
-      </div>
-
-      <!-- Input Form -->
       <form @submit.prevent="sendMessageHandler" class="input-form">
         <input
           type="file"
           ref="fileInput"
           @change="handleFileSelect"
           style="display: none"
-          accept="image/*,video/*,audio/*"
+          accept="image/*"
         />
 
         <button
@@ -320,37 +310,41 @@
           @click="openFileDialog"
           class="input-btn"
           :disabled="!authStore.isAuthenticated"
-          title="Attach file"
+          title="Đính kèm file"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="16"/>
+            <line x1="8" y1="12" x2="16" y2="12"/>
           </svg>
         </button>
 
-        <input
-          v-model="newMessage"
-          type="text"
-          placeholder="Type a message..."
-          ref="messageInput"
-          @input="handleTyping"
-          :disabled="isSendingMessage || !authStore.isAuthenticated"
-          class="message-input"
-        />
+        <div class="input-wrapper">
+          <textarea
+            v-model="newMessage"
+            ref="messageInput"
+            @input="handleTyping"
+            @keydown.enter.exact.prevent="sendMessageHandler"
+            :disabled="isSendingMessage || !authStore.isAuthenticated"
+            placeholder="Nhập tin nhắn..."
+            class="message-input custom-scrollbar"
+            rows="1"
+          ></textarea>
+        </div>
 
         <button
           type="submit"
           :disabled="!newMessage.trim() || isSendingMessage || !authStore.isAuthenticated"
           class="send-btn"
+          title="Gửi"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"/>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </button>
       </form>
     </div>
 
-    <!-- Group Management Modal -->
     <GroupManagementModal
       :isOpen="isGroupManagementOpen"
       :conversation="conversationsStore.activeConversation"
@@ -366,15 +360,15 @@ import { useAuthStore } from '../stores/auth'
 import { useConversationsStore } from '../stores/conversations'
 import { useMessagesStore } from '../stores/messages'
 import { useRealtimeStore } from '../stores/realtime'
-import { useBlockingStore } from '../stores/blocking'
 import * as conversationsApi from '../api/conversations'
+import * as messagesApi from '../api/messages'
 import GroupManagementModal from '../components/GroupManagementModal.vue'
+import { Info, Search, X, ChevronUp, ChevronDown } from 'lucide-vue-next'
 
 const authStore = useAuthStore()
 const conversationsStore = useConversationsStore()
 const messagesStore = useMessagesStore()
 const realtimeStore = useRealtimeStore()
-const blockingStore = useBlockingStore()
 
 const newMessage = ref('')
 const messagesContainer = ref(null)
@@ -384,61 +378,56 @@ const editContent = ref('')
 const originalEditContent = ref('')
 const replyingTo = ref(null)
 const fileInput = ref(null)
-const uploadingFile = ref(null)
 const isGroupManagementOpen = ref(false)
 const showReactionPicker = ref(null)
+
+const isSearching = ref(false)
+const searchQuery = ref('')
+const searchResults = ref([])
+const currentResultIndex = ref(0)
+const highlightedMessageId = ref(null)
+const searchInput = ref(null)
 const availableReactions = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 const typingTimeout = ref(null)
 const isTyping = ref(false)
 const isSendingMessage = ref(false)
 const sendError = ref(null)
-const editError = ref(null)
-const deleteError = ref(null)
 
 const conversationName = computed(() => {
   const conversation = conversationsStore.activeConversation
-  if (!conversation) return 'Conversation'
+  if (!conversation) return 'Cuộc trò chuyện'
 
   if (conversation.type === 'GROUP') {
-    return conversation.name || 'Unnamed Group'
+    return conversation.name || 'Nhóm không tên'
   }
 
   const otherMember = conversation.members?.find(m => m.userId !== authStore.user?.id)
-  return otherMember?.displayName || otherMember?.username || 'Direct Message'
+  return otherMember?.displayName || otherMember?.username || 'Tin nhắn trực tiếp'
+})
+
+const conversationAvatar = computed(() => {
+  const conversation = conversationsStore.activeConversation
+  if (!conversation) return null
+  return conversation.avatarUrl || null
+})
+
+const isOnline = computed(() => {
+  return false
 })
 
 const messages = computed(() => {
   return messagesStore.getMessages(conversationsStore.activeConversationId)
 })
 
-const otherUserId = computed(() => {
-  const conversation = conversationsStore.activeConversation
-  if (!conversation || conversation.type === 'GROUP') return null
-
-  const otherMember = conversation.members?.find(m => m.userId !== authStore.user?.id)
-  return otherMember?.userId || null
-})
-
 const typingUsersDisplay = computed(() => {
   if (!conversationsStore.activeConversationId) return []
-
-  const conversationId = conversationsStore.activeConversationId
-  const typingUserIds = realtimeStore.typingUsers[conversationId] || []
-
-  if (typingUserIds.length === 0) return []
-
-  const conversation = conversationsStore.activeConversation
-  if (!conversation) return []
-
-  return typingUserIds.map(userId => {
-    const member = conversation.members?.find(m => m.userId === userId)
-    const displayName = member?.displayName || member?.username || 'Unknown'
-    return {
-      userId,
-      displayName
-    }
-  })
+  return realtimeStore.getTypingUsersDisplay(conversationsStore.activeConversationId)
 })
+
+function getMemberCount() {
+  const conversation = conversationsStore.activeConversation
+  return conversation?.members?.length || 0
+}
 
 function shouldShowAvatar(index) {
   if (index === 0) return true
@@ -462,10 +451,10 @@ function isMessageDeleted(message) {
 
 function getUserDisplayName(userId) {
   const conversation = conversationsStore.activeConversation
-  if (!conversation) return 'Unknown'
+  if (!conversation) return 'Không rõ'
 
   const member = conversation.members?.find(m => m.userId === userId)
-  return member?.displayName || member?.username || 'Unknown'
+  return member?.displayName || member?.username || 'Không rõ'
 }
 
 function getSeenByUsers(message) {
@@ -484,9 +473,9 @@ function formatSeenIndicator(seenByUsers) {
   if (!seenByUsers || seenByUsers.length === 0) return ''
 
   if (seenByUsers.length === 1) {
-    return `Seen`
+    return `Đã xem`
   } else {
-    return `Seen by ${seenByUsers.length}`
+    return `Đã xem bởi ${seenByUsers.length}`
   }
 }
 
@@ -501,8 +490,6 @@ watch(() => conversationsStore.activeConversationId, async (newId, oldId) => {
     cancelReply()
     showReactionPicker.value = null
     sendError.value = null
-    editError.value = null
-    deleteError.value = null
     await loadMessages()
     realtimeStore.subscribeToConversation(newId)
     await nextTick()
@@ -560,12 +547,15 @@ async function sendMessageHandler() {
       replyingTo.value?.id || null
     )
     newMessage.value = ''
+    if (messageInput.value) {
+      messageInput.value.style.height = 'auto'
+    }
     cancelReply()
     await nextTick()
-    scrollToBottomIfNearBottom()
+    scrollToBottom()
   } catch (error) {
     console.error('Failed to send message:', error)
-    sendError.value = error.response?.data?.message || 'Failed to send message. Please try again.'
+    sendError.value = error.response?.data?.message || 'Gửi tin nhắn thất bại. Vui lòng thử lại.'
   } finally {
     isSendingMessage.value = false
   }
@@ -576,7 +566,6 @@ function startEdit(message) {
   editingMessageId.value = message.id
   editContent.value = message.content
   originalEditContent.value = message.content
-  editError.value = null
 }
 
 async function saveEdit() {
@@ -587,7 +576,6 @@ async function saveEdit() {
 
   const messageId = editingMessageId.value
   const conversationId = conversationsStore.activeConversationId
-  editError.value = null
 
   try {
     await messagesStore.editMessage(
@@ -603,7 +591,6 @@ async function saveEdit() {
     if (message && originalEditContent.value) {
       message.content = originalEditContent.value
     }
-    editError.value = error.response?.data?.message || 'Failed to edit message.'
     cancelEdit()
   }
 }
@@ -615,10 +602,8 @@ function cancelEdit() {
 }
 
 async function handleDeleteMessage(messageId) {
-  const confirmed = confirm('Are you sure you want to delete this message?')
+  const confirmed = confirm('Bạn có chắc chắn muốn xóa tin nhắn này?')
   if (!confirmed) return
-
-  deleteError.value = null
 
   try {
     await messagesStore.deleteMessage(
@@ -627,7 +612,6 @@ async function handleDeleteMessage(messageId) {
     )
   } catch (error) {
     console.error('Failed to delete message:', error)
-    deleteError.value = error.response?.data?.message || 'Failed to delete message. Please try again.'
   }
 }
 
@@ -642,13 +626,13 @@ function cancelReply() {
 
 function getReplyToUsername(replyToId) {
   const msg = messages.value.find(m => m.id === replyToId)
-  return msg?.senderDisplayName || msg?.senderUsername || 'Unknown'
+  return msg?.senderDisplayName || msg?.senderUsername || 'Không rõ'
 }
 
 function getReplyToPreview(replyToId) {
   const msg = messages.value.find(m => m.id === replyToId)
   if (!msg) return ''
-  if (isMessageDeleted(msg)) return 'Deleted message'
+  if (isMessageDeleted(msg)) return 'Tin nhắn đã xóa'
   return msg.content?.substring(0, 30) || ''
 }
 
@@ -685,32 +669,7 @@ function scrollToBottomIfNearBottom() {
 function formatTime(timestamp) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-}
-
-async function handleBlockUser() {
-  if (!otherUserId.value) return
-
-  const confirmBlock = confirm('Are you sure you want to block this user? You will not be able to send or receive messages.')
-  if (!confirmBlock) return
-
-  try {
-    await blockingStore.blockUser(otherUserId.value)
-  } catch (error) {
-    console.error('Failed to block user:', error)
-    alert('Failed to block user. Please try again.')
-  }
-}
-
-async function handleUnblockUser() {
-  if (!otherUserId.value) return
-
-  try {
-    await blockingStore.unblockUser(otherUserId.value)
-  } catch (error) {
-    console.error('Failed to unblock user:', error)
-    alert('Failed to unblock user. Please try again.')
-  }
+  return date.toLocaleTimeString('vi-VN', { hour: 'numeric', minute: '2-digit' })
 }
 
 function openFileDialog() {
@@ -721,18 +680,8 @@ async function handleFileSelect(event) {
   const file = event.target.files?.[0]
   if (!file) return
 
-  uploadingFile.value = file
-
   try {
-    let mediaType = 'MEDIA'
-
-    if (file.type.startsWith('image/')) {
-      mediaType = 'IMAGE'
-    } else if (file.type.startsWith('video/')) {
-      mediaType = 'VIDEO'
-    } else if (file.type.startsWith('audio/')) {
-      mediaType = 'AUDIO'
-    }
+    const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'MEDIA'
 
     await messagesStore.sendMediaMessage(
       conversationsStore.activeConversationId,
@@ -746,9 +695,8 @@ async function handleFileSelect(event) {
     scrollToBottom()
   } catch (error) {
     console.error('Failed to send media message:', error)
-    alert('Failed to send media file. Please try again.')
+    alert('Gửi file thất bại. Vui lòng thử lại.')
   } finally {
-    uploadingFile.value = null
     if (fileInput.value) {
       fileInput.value.value = ''
     }
@@ -790,6 +738,8 @@ function handleTyping() {
 
   sendError.value = null
 
+  autoResizeTextarea()
+
   if (!newMessage.value.trim()) {
     handleStopTyping()
     return
@@ -809,12 +759,121 @@ function handleTyping() {
   }, 3000)
 }
 
-function handleStopTyping() {
-  if (!conversationsStore.activeConversationId) return
+function autoResizeTextarea() {
+  if (!messageInput.value) return
+  
+  messageInput.value.style.height = 'auto'
+  messageInput.value.style.height = messageInput.value.scrollHeight + 'px'
+}
+
+function sendTypingIndicator() {
+  if (!realtimeStore.stompClient || !conversationsStore.activeConversationId) return
 
   if (isTyping.value) {
-    isTyping.value = false
+    realtimeStore.stompClient.send(
+      '/app/typing',
+      {},
+      JSON.stringify({ conversationId: conversationsStore.activeConversationId })
+    )
+  }
+}
+
+function toggleMessageSearch() {
+  isSearching.value = !isSearching.value
+  if (isSearching.value) {
+    nextTick(() => {
+      searchInput.value?.focus()
+    })
+  } else {
+    searchQuery.value = ''
+    searchResults.value = []
+    highlightedMessageId.value = null
+  }
+}
+
+let searchDebounce = null
+async function handleSearch() {
+  if (searchDebounce) clearTimeout(searchDebounce)
+  
+  if (!searchQuery.value.trim() || searchQuery.value.length < 2) {
+    searchResults.value = []
+    return
+  }
+
+  if (!conversationsStore.activeConversationId) {
+    console.error('No active conversation')
+    return
+  }
+
+  searchDebounce = setTimeout(async () => {
+    try {
+      console.log('Searching in conversation:', conversationsStore.activeConversationId, 'Query:', searchQuery.value)
+      const response = await messagesApi.searchMessages(
+        conversationsStore.activeConversationId,
+        searchQuery.value
+      )
+      console.log('Search response:', response)
+      searchResults.value = response.data.messages || []
+      currentResultIndex.value = 0
+      
+      if (searchResults.value.length > 0) {
+        scrollToMessage(searchResults.value[0].id)
+      }
+    } catch (error) {
+      console.error('Search failed:', error)
+      searchResults.value = []
+    }
+  }, 300)
+}
+
+function nextResult() {
+  if (currentResultIndex.value < searchResults.value.length - 1) {
+    currentResultIndex.value++
+    scrollToMessage(searchResults.value[currentResultIndex.value].id)
+  }
+}
+
+function previousResult() {
+  if (currentResultIndex.value > 0) {
+    currentResultIndex.value--
+    scrollToMessage(searchResults.value[currentResultIndex.value].id)
+  }
+}
+
+function scrollToMessage(messageId) {
+  highlightedMessageId.value = messageId
+  
+  nextTick(() => {
+    const element = document.getElementById(`message-${messageId}`)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      
+      setTimeout(() => {
+        if (highlightedMessageId.value === messageId) {
+          highlightedMessageId.value = null
+        }
+      }, 2000)
+    }
+  })
+}
+
+function clearMessageSearch() {
+  searchQuery.value = ''
+  searchResults.value = []
+  highlightedMessageId.value = null
+}
+
+function closeMessageSearch() {
+  isSearching.value = false
+  searchQuery.value = ''
+  searchResults.value = []
+  highlightedMessageId.value = null
+}
+
+function handleStopTyping() {
+  if (isTyping.value && conversationsStore.activeConversationId) {
     realtimeStore.sendTypingStop(conversationsStore.activeConversationId)
+    isTyping.value = false
   }
 
   if (typingTimeout.value) {
@@ -825,33 +884,32 @@ function handleStopTyping() {
 </script>
 
 <style scoped>
-/* Container */
 .no-conversation {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 40px;
   text-align: center;
   color: var(--color-text-secondary);
 }
 
 .no-conversation svg {
   margin-bottom: 24px;
-  opacity: 0.2;
+  opacity: 0.3;
 }
 
 .no-conversation h2 {
   font-size: 24px;
   font-weight: 700;
   color: var(--color-text-primary);
-  margin: 0 0 8px 0;
+  margin-bottom: 8px;
 }
 
 .no-conversation p {
-  font-size: 15px;
-  margin: 0;
+  font-size: 16px;
+  color: var(--color-text-secondary);
 }
 
 .chat-view {
@@ -859,30 +917,47 @@ function handleStopTyping() {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: var(--color-bg-primary);
+  background: var(--color-background);
 }
 
-/* Header */
 .chat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 24px;
-  background: var(--color-bg-secondary);
+  height: 80px;
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background: var(--color-surface);
+  flex-shrink: 0;
 }
 
 .header-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
 }
 
-.chat-avatar .avatar-placeholder {
+.chat-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatar-image,
+.avatar-placeholder {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  background: var(--color-gradient-warm);
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.avatar-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
   color: white;
   display: flex;
   align-items: center;
@@ -891,50 +966,71 @@ function handleStopTyping() {
   font-weight: 600;
 }
 
+.online-indicator {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: #10b981;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+}
+
 .chat-details {
-  display: flex;
-  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .chat-name {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--color-text-primary);
-  margin: 0;
+  margin: 0 0 4px 0;
 }
 
 .chat-status {
   font-size: 13px;
-  color: var(--color-text-tertiary);
-  margin-top: 2px;
+  color: var(--color-text-secondary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .chat-status.typing {
   color: var(--color-primary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  font-weight: 500;
 }
 
-.typing-dot {
+.typing-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.typing-dots .dot {
   width: 4px;
   height: 4px;
   background: var(--color-primary);
   border-radius: 50%;
-  animation: typing 1.4s infinite;
+  animation: typing-bounce 1.4s infinite;
 }
 
-.typing-dot:nth-child(2) {
+.typing-dots .dot:nth-child(2) {
   animation-delay: 0.2s;
 }
 
-.typing-dot:nth-child(3) {
+.typing-dots .dot:nth-child(3) {
   animation-delay: 0.4s;
 }
 
-@keyframes typing {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-6px); }
+@keyframes typing-bounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-6px);
+  }
 }
 
 .header-actions {
@@ -943,50 +1039,34 @@ function handleStopTyping() {
 }
 
 .header-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   border: none;
-  background: var(--color-bg-hover);
+  background: transparent;
   color: var(--color-text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .header-btn:hover {
-  background: var(--color-border);
+  background: var(--color-surface-hover);
   color: var(--color-text-primary);
 }
 
-.header-btn.primary {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-}
-
-/* Messages Container */
 .messages-container {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column-reverse;
-}
-
-.messages-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.messages-container::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 3px;
+  padding: 24px;
+  background: var(--color-background);
 }
 
 .messages-loading,
 .messages-empty {
-  flex: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -996,52 +1076,73 @@ function handleStopTyping() {
 
 .messages-empty svg {
   margin-bottom: 16px;
-  opacity: 0.2;
+  opacity: 0.3;
 }
 
 .messages-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 16px;
 }
 
-/* Message */
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.date-label {
+  background: var(--color-date-separator-bg);
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-date-separator-text);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid var(--color-date-separator-border);
+}
+
+.message-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
 .message {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .message.own {
   flex-direction: row-reverse;
 }
 
-.message-avatar {
-  flex-shrink: 0;
-}
-
+.message-avatar,
 .avatar-small {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--color-accent);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
 .message-avatar-spacer {
-  width: 32px;
+  width: 36px;
   flex-shrink: 0;
 }
 
 .message-content-wrapper {
   display: flex;
   flex-direction: column;
-  max-width: 65%;
+  max-width: 60%;
   gap: 4px;
 }
 
@@ -1050,20 +1151,117 @@ function handleStopTyping() {
 }
 
 .message-sender-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-text-secondary);
-  margin-bottom: 4px;
+  margin-left: 12px;
+}
+
+.message-bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.message-bubble.received {
+  background: var(--color-message-received-bg);
+  color: var(--color-message-received-text);
+  border: 1px solid var(--color-message-received-border);
+  border-top-left-radius: 4px;
+}
+
+.message-bubble.sent {
+  background: var(--color-message-sent-bg);
+  color: var(--color-message-sent-text);
+  border-top-right-radius: 4px;
+}
+
+.message-text {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.deleted-text {
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.edited-badge {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: 6px;
+}
+
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 0;
+  margin-top: 4px;
+}
+
+.message.own .message-meta {
+  margin-left: 0;
+  margin-right: 0;
+  flex-direction: row-reverse;
+}
+
+.message-time {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.message-seen {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.message-seen svg {
+  color: #10b981;
+}
+
+.message-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.action-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.action-btn.delete:hover {
+  color: var(--color-error);
 }
 
 .message-reply-context {
   display: flex;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--color-bg-hover);
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 8px;
-  font-size: 13px;
   margin-bottom: 4px;
+  font-size: 13px;
 }
 
 .reply-bar {
@@ -1087,118 +1285,24 @@ function handleStopTyping() {
   color: var(--color-text-secondary);
 }
 
-/* Message Bubble */
-.message-bubble {
-  padding: 10px 14px;
-  border-radius: 16px;
-  font-size: 15px;
-  line-height: 1.5;
-  word-wrap: break-word;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.message-bubble.sent {
-  background: var(--color-primary);
-  color: white;
-  border-bottom-right-radius: 4px;
-}
-
-.message-bubble.received {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  border-bottom-left-radius: 4px;
-}
-
-.deleted-text {
-  font-style: italic;
-  opacity: 0.6;
-}
-
-.message-text {
-  position: relative;
-}
-
-.edited-badge {
-  font-size: 11px;
-  opacity: 0.7;
-  margin-left: 6px;
-}
-
-/* Media */
-.media-content {
-  margin: -4px;
-}
-
-.media-image {
-  max-width: 320px;
-  max-height: 320px;
-  border-radius: 12px;
-  display: block;
-  cursor: pointer;
-}
-
-.media-placeholder {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: var(--color-bg-hover);
-  border-radius: 12px;
-}
-
-.media-icon {
-  font-size: 32px;
-}
-
-.media-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.media-name {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.media-download,
-.media-link {
-  font-size: 13px;
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-.media-download:hover,
-.media-link:hover {
-  text-decoration: underline;
-}
-
-/* Reactions */
 .message-reactions {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
 }
 
 .reaction-badge {
-  min-width: 32px;
-  height: 24px;
-  padding: 0 8px;
-  background: var(--color-bg-hover);
+  padding: 2px 8px;
+  background: var(--color-surface-hover);
   border: 1px solid var(--color-border);
   border-radius: 12px;
   font-size: 14px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .reaction-badge:hover {
-  background: var(--color-border);
   transform: scale(1.1);
 }
 
@@ -1207,95 +1311,38 @@ function handleStopTyping() {
   border-color: var(--color-primary);
 }
 
-/* Message Footer */
-.message-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-.message-time {
-  flex-shrink: 0;
-}
-
-.message-seen {
-  font-size: 11px;
-  color: var(--color-primary);
-}
-
-.message-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.message:hover .message-actions {
-  opacity: 1;
-}
-
-.action-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: none;
-  background: var(--color-bg-hover);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.action-btn:hover {
-  background: var(--color-border);
-  color: var(--color-text-primary);
-}
-
-.action-btn.delete:hover {
-  background: var(--color-error);
-  color: white;
-}
-
-/* Reaction Picker */
 .reaction-picker {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   padding: 8px;
-  background: var(--color-bg-secondary);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  margin-top: 4px;
+  box-shadow: var(--shadow-md);
+  margin-top: 8px;
 }
 
 .reaction-option {
-  width: 36px;
-  height: 36px;
-  border: none;
+  padding: 6px 10px;
   background: transparent;
-  border-radius: 8px;
+  border: none;
   font-size: 20px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  border-radius: 8px;
+  transition: all var(--transition-fast);
 }
 
 .reaction-option:hover {
-  background: var(--color-bg-hover);
+  background: var(--color-surface-hover);
   transform: scale(1.2);
 }
 
-/* Edit Mode */
 .message-edit {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: var(--color-bg-secondary);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 12px;
 }
@@ -1305,11 +1352,8 @@ function handleStopTyping() {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   font-size: 15px;
-  outline: none;
-}
-
-.edit-input:focus {
-  border-color: var(--color-primary);
+  background: var(--color-input-bg);
+  color: var(--color-text-primary);
 }
 
 .edit-actions {
@@ -1318,13 +1362,13 @@ function handleStopTyping() {
 }
 
 .edit-btn {
-  padding: 6px 16px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .edit-btn.save {
@@ -1332,59 +1376,97 @@ function handleStopTyping() {
   color: white;
 }
 
-.edit-btn.save:hover {
-  background: var(--color-primary-dark);
-}
-
 .edit-btn.cancel {
-  background: var(--color-bg-hover);
+  background: var(--color-surface-hover);
   color: var(--color-text-primary);
 }
 
-.edit-btn.cancel:hover {
-  background: var(--color-border);
+.typing-indicator-message {
+  animation: fadeIn 0.3s ease-out;
 }
 
-/* Input Container */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.typing-bubble {
+  padding: 12px 16px;
+  background: var(--color-message-received-bg);
+  border: 1px solid var(--color-message-received-border);
+  border-radius: 18px;
+  border-top-left-radius: 4px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--color-text-tertiary);
+  border-radius: 50%;
+  animation: typing-bounce 1.4s infinite;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
 .input-container {
-  padding: 16px 24px;
-  background: var(--color-bg-secondary);
+  padding: 20px 24px;
+  background: var(--color-surface);
   border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .input-error {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  background: #FEF2F2;
+  padding: 12px;
+  background: #fef2f2;
   color: var(--color-error);
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: 8px;
   margin-bottom: 12px;
+  font-size: 14px;
 }
 
 .reply-preview {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
-  background: var(--color-bg-hover);
-  border-radius: 10px;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--color-surface-hover);
+  border-left: 3px solid var(--color-primary);
+  border-radius: 8px;
   margin-bottom: 12px;
 }
 
 .reply-info {
   display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--color-text-secondary);
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .reply-details {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
 .reply-to-name {
@@ -1396,12 +1478,36 @@ function handleStopTyping() {
 .reply-to-content {
   font-size: 13px;
   color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .reply-cancel {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.reply-cancel:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.input-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.input-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
@@ -1409,94 +1515,55 @@ function handleStopTyping() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.reply-cancel:hover {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
-}
-
-.upload-preview {
-  padding: 10px 14px;
-  background: var(--color-primary-light);
-  border-radius: 10px;
-  margin-bottom: 12px;
-}
-
-.upload-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--color-primary-dark);
-  font-size: 14px;
-}
-
-.upload-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--color-primary-light);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-/* Input Form */
-.input-form {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.input-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: none;
-  background: var(--color-bg-hover);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  transition: all var(--transition-fast);
   flex-shrink: 0;
-  transition: all 0.2s ease;
 }
 
 .input-btn:hover:not(:disabled) {
-  background: var(--color-border);
-  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
 }
 
 .input-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+.input-wrapper {
+  flex: 1;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-input-border);
+  border-radius: 20px;
+  padding: 8px 16px;
+  transition: all var(--transition-fast);
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .message-input {
-  flex: 1;
-  padding: 10px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 20px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
   font-size: 15px;
-  background: var(--color-bg-primary);
+  resize: none;
   outline: none;
-  transition: all 0.2s ease;
+  max-height: 120px;
+  min-height: 24px;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
-.message-input:focus {
-  border-color: var(--color-primary);
-  background: var(--color-bg-secondary);
-}
-
-.message-input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.message-input::placeholder {
+  color: var(--color-text-tertiary);
 }
 
 .send-btn {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 12px;
   border: none;
   background: var(--color-primary);
@@ -1505,8 +1572,8 @@ function handleStopTyping() {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: all var(--transition-fast);
   flex-shrink: 0;
-  transition: all 0.2s ease;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -1514,9 +1581,168 @@ function handleStopTyping() {
   transform: scale(1.05);
 }
 
+.send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
 .send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.media-content {
+  max-width: 100%;
+}
+
+.message-bubble.sent .media-content,
+.message-bubble.received .media-content {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.message-bubble.sent:has(.media-content),
+.message-bubble.received:has(.media-content) {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.media-image {
+  max-width: 400px;
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  cursor: pointer;
+  display: block;
+  object-fit: contain;
+}
+
+.message-wrapper.highlighted {
+  background: var(--color-primary-light);
+  border-radius: 8px;
+  animation: pulse 0.6s ease;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.message-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.search-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-input-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  transition: all var(--transition-fast);
+}
+
+.search-input-wrapper:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.search-input-wrapper .search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.search-input-wrapper .search-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.search-input-wrapper .clear-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.search-input-wrapper .clear-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.search-navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  min-width: 50px;
+  text-align: center;
+}
+
+.nav-btn {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.nav-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.close-search-btn {
+  background: transparent;
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.close-search-btn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
 }
 
 .spinner {
@@ -1526,9 +1752,5 @@ function handleStopTyping() {
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 </style>

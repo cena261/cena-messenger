@@ -31,3 +31,15 @@ export async function deleteMessage(messageId) {
   const response = await apiClient.delete(`/messages/${messageId}`)
   return response.data
 }
+
+export async function searchMessages(conversationId, query, page = 0, size = 50) {
+  const response = await apiClient.get('/search/messages', {
+    params: {
+      conversationId,
+      query,
+      page,
+      size
+    }
+  })
+  return response.data
+}
