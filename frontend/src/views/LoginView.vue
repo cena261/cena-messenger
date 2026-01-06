@@ -417,7 +417,7 @@ function backToLogin() {
 .auth-container {
   display: flex;
   min-height: 100vh;
-  background: var(--color-surface-light);
+  background: #ffffff;
 }
 
 .auth-hero {
@@ -427,8 +427,8 @@ function backToLogin() {
   flex-direction: column;
   justify-content: space-between;
   padding: 48px;
-  background: var(--color-background-dark);
-  color: var(--color-text-white);
+  background: #101622;
+  color: #ffffff;
   overflow: hidden;
 }
 
